@@ -26,8 +26,18 @@ export function activate(context: vscode.ExtensionContext) {
 
             const cursorPosition = editor.selection.end;
 
+            if (
+                editor.document.lineAt(editor.selection.end.line)
+                    .isEmptyOrWhitespace
+            ) {
+                goToNonEmptyLine(editor);
+            }
+
             lineSelect(editor);
+
             await growSelection(editor, cursorPosition);
+
+            setCursorPosition(editor, editor.selection.active);
 
             // Reveal current cursor position
             const position = editor.selection.active;
@@ -47,7 +57,7 @@ const lineSelect = function lineSelect(editor: vscode.TextEditor) {
     const currentLine = selection.active.line;
 
     if (document.lineAt(currentLine).isEmptyOrWhitespace) {
-        goToNextLine(editor, currentLine);
+        goToNonEmptyLine(editor);
     }
 
     const { start: lineStart, end: lineEnd } = getLinePosition(
@@ -75,7 +85,7 @@ const growSelection = async function growSelection(
         document.lineAt(newEnd.line).isEmptyOrWhitespace ||
         newEnd.isEqual(originalPosition)
     ) {
-        goToNextLine(editor, newEnd.line);
+        goToNonEmptyLine(editor);
         return;
     }
 
@@ -87,10 +97,10 @@ const growSelection = async function growSelection(
     await growSelection(editor, originalPosition);
 };
 
-function goToNextLine(editor: vscode.TextEditor, start: number) {
+function goToNonEmptyLine(editor: vscode.TextEditor) {
     const { document } = editor;
 
-    let line = start + 1;
+    let line = editor.selection.end.line + 1;
     while (
         line < document.lineCount &&
         document.lineAt(line).isEmptyOrWhitespace
@@ -141,7 +151,6 @@ const getLinePosition = function getLineTextRange(
         end: lineRange.end,
     };
 };
-//const getSymbolLevel(symbols: vscode.DocumentSymbol[])
 
 // This method is called when your extension is deactivated
 export function deactivate() {}
