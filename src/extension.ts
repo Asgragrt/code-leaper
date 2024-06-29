@@ -26,6 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             const cursorPosition = editor.selection.end;
 
+            // TODO set as option
             if (
                 editor.document.lineAt(editor.selection.end.line)
                     .isEmptyOrWhitespace
@@ -65,7 +66,7 @@ const lineSelect = function lineSelect(editor: vscode.TextEditor) {
         currentLine
     );
 
-    const lineSelection = new vscode.Selection(lineStart, lineEnd);
+    const lineSelection = new vscode.Selection(lineEnd, lineStart);
 
     editor.selection = lineSelection;
 };
@@ -90,7 +91,7 @@ const growSelection = async function growSelection(
     }
 
     if (newStart.character == 0) {
-        setCursorPosition(editor, newEnd);
+        //setCursorPosition(editor, newEnd);
         return;
     }
 
