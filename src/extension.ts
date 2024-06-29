@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
             // Reveal current cursor position
             const position = editor.selection.active;
             const range = new vscode.Range(position, position);
-            editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+            editor.revealRange(range, vscode.TextEditorRevealType.Default);
         }
     );
 
