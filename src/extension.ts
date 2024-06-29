@@ -70,8 +70,6 @@ const growSelection = async function growSelection(
 
     const { start: newStart, end: newEnd } = editor.selection;
 
-    //newSelection.start.isEqual(newSelection.end);
-    const endOfLine = document.lineAt(newEnd.line).range.end.character;
     if (
         newStart.isEqual(newEnd) ||
         document.lineAt(newEnd.line).isEmptyOrWhitespace ||
