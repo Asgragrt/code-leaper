@@ -27,7 +27,12 @@ export function activate(context: vscode.ExtensionContext) {
             const cursorPosition = editor.selection.end;
 
             lineSelect(editor);
-            growSelection(editor, cursorPosition);
+            await growSelection(editor, cursorPosition);
+
+            // Reveal current cursor position
+            const position = editor.selection.active;
+            const range = new vscode.Range(position, position);
+            editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
         }
     );
 
