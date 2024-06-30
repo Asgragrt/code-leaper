@@ -14,7 +14,7 @@ export default class SelectionHelper {
         this.document = editor.document;
     }
 
-    private async getNode(
+    async getNode(
         position: vscode.Position | vscode.Range
     ): Promise<parser.SyntaxNode> {
         if (!SelectionHelper.getNodeAtLocation) {
@@ -39,7 +39,7 @@ export default class SelectionHelper {
         return SelectionHelper.getNodeAtLocation(location);
     }
 
-    private growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
+    growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
         // TODO Clean this part
         let currentNode: parser.SyntaxNode = node;
         let currentEndPosition: vscode.Position = toPosition(
