@@ -88,6 +88,10 @@ class SelectionHelper {
         return nextStatement ? nextStatement : statementNode;
     }
 
+    private getLine(line: number): vscode.TextLine {
+        return this.document.lineAt(line);
+    }
+
     private isStartOfLine(position: vscode.Position): boolean {
         const { firstNonWhitespaceCharacterIndex: column } = this.getLine(
             position.line
@@ -97,15 +101,16 @@ class SelectionHelper {
     }
 
     private isEndOfLine(position: vscode.Position): boolean {
-        return position.isEqual(this.getLine(position.line).range.end);
+        const { text } = this.getLine(position.line);
+        const endPosition = new vscode.Position(
+            position.line,
+            text.trimEnd().length
+        );
+        return position.isEqual(endPosition);
     }
 
     private isLineEmpty(line: number): boolean {
         return this.getLine(line).isEmptyOrWhitespace;
-    }
-
-    private getLine(line: number): vscode.TextLine {
-        return this.document.lineAt(line);
     }
 
     private getNextNonEmptyPosition(currentLine: number): vscode.Position {
