@@ -24,11 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
             const editor = vscode.window.activeTextEditor;
             if (!editor) return;
 
-            if (isCursorOnEmptyLine(editor)) {
-                goToNonEmptyLine(editor);
-            }
-
-            const statement = await new SelectionHelper(editor).getStatement(
+            const statement = await new SelectionHelper(editor).nextStatement(
                 editor.selection.active
             );
 
