@@ -4,9 +4,11 @@ import * as vscode from 'vscode';
 import parser from 'web-tree-sitter';
 
 class SelectionHelper {
-    editor: vscode.TextEditor;
-    document: vscode.TextDocument;
-    getNodeAtLocation?: (location: vscode.Location) => parser.SyntaxNode;
+    private static getNodeAtLocation?: (
+        location: vscode.Location
+    ) => parser.SyntaxNode;
+    private editor: vscode.TextEditor;
+    private document: vscode.TextDocument;
 
     constructor(editor: vscode.TextEditor) {
         this.editor = editor;
@@ -42,15 +44,23 @@ class SelectionHelper {
     }
 
     private growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
+        // TODO Clean this part
         let currentNode: parser.SyntaxNode = node;
-        let currentPosition: vscode.Position = toPosition(
+        let currentEndPosition: vscode.Position = toPosition(
             currentNode.endPosition
         );
+        let currentStartPosition: vscode.Position = toPosition(
+            currentNode.startPosition
+        );
 
-        while (!this.isEndOfLine(currentPosition)) {
+        while (
+            !this.isEndOfLine(currentEndPosition) ||
+            !this.isStartOfLine(currentStartPosition)
+        ) {
             if (!currentNode.parent) break;
             currentNode = currentNode.parent;
-            currentPosition = toPosition(currentNode.endPosition);
+            currentEndPosition = toPosition(currentNode.endPosition);
+            currentStartPosition = toPosition(currentNode.startPosition);
         }
 
         return currentNode;
@@ -76,6 +86,14 @@ class SelectionHelper {
         }
 
         return nextStatement ? nextStatement : statementNode;
+    }
+
+    private isStartOfLine(position: vscode.Position): boolean {
+        const { firstNonWhitespaceCharacterIndex: column } = this.getLine(
+            position.line
+        );
+        const startPosition = new vscode.Position(position.line, column);
+        return position.isEqual(startPosition);
     }
 
     private isEndOfLine(position: vscode.Position): boolean {
