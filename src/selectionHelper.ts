@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import parser from 'web-tree-sitter';
-import { toPosition } from './utils';
+import { toPosition, clampPositionToRange } from './utils';
 
 export default class SelectionHelper {
     private static getNodeAtLocation?: (
@@ -68,10 +68,12 @@ export default class SelectionHelper {
     //async getStatementAtNode
 
     async getStatement(position: vscode.Position): Promise<parser.SyntaxNode> {
+        let clampedPosition = this.clampPositionToText(position);
+
         // If EOL check if is the end of the statement
-        let newPosition = this.isEndOfLine(position)
-            ? position.translate(0, -1)
-            : position;
+        let newPosition = this.isEndOfLine(clampedPosition)
+            ? clampedPosition.translate(0, -1)
+            : clampedPosition;
 
         const baseNode = await this.getNode(newPosition);
 
@@ -80,8 +82,10 @@ export default class SelectionHelper {
 
         let nextStatement: parser.SyntaxNode | undefined;
         // If the cursor was at the end of the statement jump to the next
-        if (toPosition(statementNode.endPosition).isEqual(position)) {
-            const nextPosition = this.getNextNonEmptyPosition(position.line);
+        if (toPosition(statementNode.endPosition).isEqual(clampedPosition)) {
+            const nextPosition = this.getNextNonEmptyPosition(
+                clampedPosition.line
+            );
             const nextBase = await this.getNode(nextPosition);
             nextStatement = this.growNodeToStatement(nextBase);
         }
@@ -94,21 +98,49 @@ export default class SelectionHelper {
         return this.document.lineAt(line);
     }
 
-    private isStartOfLine(position: vscode.Position): boolean {
-        const { firstNonWhitespaceCharacterIndex: column } = this.getLine(
-            position.line
+    private firstCharacterPosition(line: number): vscode.Position;
+    private firstCharacterPosition(position: vscode.Position): vscode.Position;
+    private firstCharacterPosition(
+        argument: vscode.Position | number
+    ): vscode.Position {
+        const line =
+            argument instanceof vscode.Position ? argument.line : argument;
+        const { firstNonWhitespaceCharacterIndex: column } = this.getLine(line);
+        return new vscode.Position(line, column);
+    }
+
+    private lastCharacterPosition(line: number): vscode.Position;
+    private lastCharacterPosition(position: vscode.Position): vscode.Position;
+    private lastCharacterPosition(
+        argument: vscode.Position | number
+    ): vscode.Position {
+        const line =
+            argument instanceof vscode.Position ? argument.line : argument;
+        const { text } = this.getLine(line);
+        return new vscode.Position(line, text.trimEnd().length);
+    }
+
+    private lineTextRange(line: number): vscode.Range;
+    private lineTextRange(position: vscode.Position): vscode.Range;
+    private lineTextRange(argument: vscode.Position | number): vscode.Range {
+        const line =
+            argument instanceof vscode.Position ? argument.line : argument;
+        return new vscode.Range(
+            this.firstCharacterPosition(line),
+            this.lastCharacterPosition(line)
         );
-        const startPosition = new vscode.Position(position.line, column);
-        return position.isEqual(startPosition);
+    }
+
+    private clampPositionToText(position: vscode.Position): vscode.Position {
+        return clampPositionToRange(position, this.lineTextRange(position));
+    }
+
+    private isStartOfLine(position: vscode.Position): boolean {
+        return position.isEqual(this.firstCharacterPosition(position));
     }
 
     private isEndOfLine(position: vscode.Position): boolean {
-        const { text } = this.getLine(position.line);
-        const endPosition = new vscode.Position(
-            position.line,
-            text.trimEnd().length
-        );
-        return position.isEqual(endPosition);
+        return position.isEqual(this.lastCharacterPosition(position));
     }
 
     private isLineEmpty(line: number): boolean {
