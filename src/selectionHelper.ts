@@ -54,7 +54,8 @@ export default class SelectionHelper {
 
         while (
             !this.isEndOfLine(currentEndPosition) ||
-            !this.isStartOfLine(currentStartPosition)
+            !this.isStartOfLine(currentStartPosition) ||
+            currentNode.childCount == 0
         ) {
             if (!currentNode.parent) break;
             currentNode = currentNode.parent;
