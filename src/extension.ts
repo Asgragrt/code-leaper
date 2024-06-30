@@ -14,6 +14,14 @@ function endOfLine(
     return position.isEqual(editor.document.lineAt(position.line).range.end);
 }
 
+function isCursorOnEmptyLine(editor: vscode.TextEditor) {
+    return isLineEmpty(editor, editor.selection.active.line);
+}
+
+function isCursorEndOfLine(editor: vscode.TextEditor) {
+    return endOfLine(editor, editor.selection.active);
+}
+
 function findStatementEnd(
     editor: vscode.TextEditor,
     node: parser.SyntaxNode
@@ -33,7 +41,7 @@ function findStatementEnd(
 export function activate(context: vscode.ExtensionContext) {
     // Use the console to output diagnostic information (console.log) and errors (console.error)
     // This line of code will only be executed once when your extension is activated
-    console.log('Congratulations, your extension "code-leaper" is now active!');
+    console.log('Initializing "code-leaper"!');
 
     // The command has been defined in the package.json file
     // Now provide the implementation of the command with registerCommand
@@ -44,6 +52,7 @@ export function activate(context: vscode.ExtensionContext) {
             const editor = vscode.window.activeTextEditor;
             if (!editor) return;
 
+            // Activate parse-tree extension
             const parseTreeExtension =
                 vscode.extensions.getExtension('pokey.parse-tree');
 
@@ -53,12 +62,17 @@ export function activate(context: vscode.ExtensionContext) {
 
             const { getNodeAtLocation } = await parseTreeExtension.activate();
 
-            const newRange = new vscode.Range(
-                editor.selection.start,
-                editor.selection.end
-            );
+            if (isCursorOnEmptyLine(editor)) {
+                goToNonEmptyLine(editor);
+            }
 
-            const location = new vscode.Location(editor.document.uri, newRange);
+            if (isCursorEndOfLine(editor)) {
+            }
+
+            const location = new vscode.Location(
+                editor.document.uri,
+                editor.selection.active
+            );
 
             const node: parser.SyntaxNode = getNodeAtLocation(location);
 
@@ -77,6 +91,10 @@ function jumpToCursor(editor: vscode.TextEditor) {
     const position = editor.selection.active;
     const range = new vscode.Range(position, position);
     editor.revealRange(range, vscode.TextEditorRevealType.Default);
+}
+
+function isLineEmpty(editor: vscode.TextEditor, line: number): boolean {
+    return editor.document.lineAt(line).isEmptyOrWhitespace;
 }
 
 function goToNonEmptyLine(editor: vscode.TextEditor) {
