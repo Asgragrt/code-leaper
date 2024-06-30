@@ -16,7 +16,7 @@ class SelectionHelper {
     private async getNode(
         position: vscode.Position | vscode.Range
     ): Promise<parser.SyntaxNode> {
-        if (!this.getNodeAtLocation) {
+        if (!SelectionHelper.getNodeAtLocation) {
             // Activate parse-tree extension
             const parseTreeExtension =
                 vscode.extensions.getExtension('pokey.parse-tree');
@@ -32,12 +32,13 @@ class SelectionHelper {
                     location: vscode.Location
                 ) => parser.SyntaxNode;
             } = await parseTreeExtension.activate();
-            this.getNodeAtLocation = getNodeAtLocation;
+            console.log('Invoking the other extension');
+            SelectionHelper.getNodeAtLocation = getNodeAtLocation;
         }
 
         const location = new vscode.Location(this.document.uri, position);
 
-        return this.getNodeAtLocation(location);
+        return SelectionHelper.getNodeAtLocation(location);
     }
 
     private growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
