@@ -39,5 +39,8 @@
         "eslint": "^8.57.0",
         "typescript": "^5.4.5",
         "web-tree-sitter": "^0.22.6"
-    }
+    },
+    "extensionDependencies": [
+        "pokey.parse-tree"
+    ]
 }
