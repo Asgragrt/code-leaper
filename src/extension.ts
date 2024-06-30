@@ -3,37 +3,114 @@
 import * as vscode from 'vscode';
 import parser from 'web-tree-sitter';
 
+class SelectionHelper {
+    editor: vscode.TextEditor;
+    document: vscode.TextDocument;
+    getNodeAtLocation?: (location: vscode.Location) => parser.SyntaxNode;
+
+    constructor(editor: vscode.TextEditor) {
+        this.editor = editor;
+        this.document = editor.document;
+    }
+
+    private async getNode(
+        position: vscode.Position | vscode.Range
+    ): Promise<parser.SyntaxNode> {
+        if (!this.getNodeAtLocation) {
+            // Activate parse-tree extension
+            const parseTreeExtension =
+                vscode.extensions.getExtension('pokey.parse-tree');
+
+            if (parseTreeExtension == null) {
+                throw new Error('Depends on pokey.parse-tree extension');
+            }
+
+            const {
+                getNodeAtLocation,
+            }: {
+                getNodeAtLocation: (
+                    location: vscode.Location
+                ) => parser.SyntaxNode;
+            } = await parseTreeExtension.activate();
+            this.getNodeAtLocation = getNodeAtLocation;
+        }
+
+        const location = new vscode.Location(this.document.uri, position);
+
+        return this.getNodeAtLocation(location);
+    }
+
+    private growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
+        let currentNode: parser.SyntaxNode = node;
+        let currentPosition: vscode.Position = toPosition(
+            currentNode.endPosition
+        );
+
+        while (!this.isEndOfLine(currentPosition)) {
+            if (!currentNode.parent) break;
+            currentNode = currentNode.parent;
+            currentPosition = toPosition(currentNode.endPosition);
+        }
+
+        return currentNode;
+    }
+
+    async getStatement(position: vscode.Position): Promise<parser.SyntaxNode> {
+        // If EOL check if is the end of the statement
+        let newPosition = this.isEndOfLine(position)
+            ? position.translate(0, -1)
+            : position;
+
+        const baseNode = await this.getNode(newPosition);
+
+        // TODO fix this :D
+        const statementNode = this.growNodeToStatement(baseNode);
+
+        let nextStatement: parser.SyntaxNode | undefined;
+        // If the cursor was at the end of the statement jump to the next
+        if (toPosition(statementNode.endPosition).isEqual(position)) {
+            const nextPosition = this.getNextNonEmptyPosition(position.line);
+            const nextBase = await this.getNode(nextPosition);
+            nextStatement = this.growNodeToStatement(nextBase);
+        }
+
+        return nextStatement ? nextStatement : statementNode;
+    }
+
+    private isEndOfLine(position: vscode.Position): boolean {
+        return position.isEqual(this.getLine(position.line).range.end);
+    }
+
+    private isLineEmpty(line: number): boolean {
+        return this.getLine(line).isEmptyOrWhitespace;
+    }
+
+    private getLine(line: number): vscode.TextLine {
+        return this.document.lineAt(line);
+    }
+
+    private getNextNonEmptyPosition(currentLine: number): vscode.Position {
+        let line = currentLine + 1;
+        while (line < this.document.lineCount && this.isLineEmpty(line)) {
+            line++;
+        }
+
+        if (line >= this.document.lineCount) {
+            return this.getLine(currentLine).range.end;
+        }
+
+        const { firstNonWhitespaceCharacterIndex: column } = this.getLine(line);
+
+        return new vscode.Position(line, column);
+    }
+}
+
 function toPosition(position: parser.Point) {
     return new vscode.Position(position.row, position.column);
 }
 
-function endOfLine(
-    editor: vscode.TextEditor,
-    position: vscode.Position
-): boolean {
-    return position.isEqual(editor.document.lineAt(position.line).range.end);
-}
-
 function isCursorOnEmptyLine(editor: vscode.TextEditor) {
     return isLineEmpty(editor, editor.selection.active.line);
-}
-
-function isCursorEndOfLine(editor: vscode.TextEditor) {
-    return endOfLine(editor, editor.selection.active);
-}
-
-function findStatementEnd(
-    editor: vscode.TextEditor,
-    node: parser.SyntaxNode
-): vscode.Position {
-    let currentNode: parser.SyntaxNode = node;
-    let currentPosition: vscode.Position = toPosition(currentNode.endPosition);
-    while (!endOfLine(editor, currentPosition)) {
-        if (!currentNode.parent) break;
-        currentNode = currentNode.parent;
-        currentPosition = toPosition(currentNode.endPosition);
-    }
-    return currentPosition;
 }
 
 // This method is called when your extension is activated
@@ -52,33 +129,15 @@ export function activate(context: vscode.ExtensionContext) {
             const editor = vscode.window.activeTextEditor;
             if (!editor) return;
 
-            // Activate parse-tree extension
-            const parseTreeExtension =
-                vscode.extensions.getExtension('pokey.parse-tree');
-
-            if (parseTreeExtension == null) {
-                throw new Error('Depends on pokey.parse-tree extension');
-            }
-
-            const { getNodeAtLocation } = await parseTreeExtension.activate();
-
             if (isCursorOnEmptyLine(editor)) {
                 goToNonEmptyLine(editor);
             }
 
-            if (isCursorEndOfLine(editor)) {
-            }
-
-            const location = new vscode.Location(
-                editor.document.uri,
+            const statement = await new SelectionHelper(editor).getStatement(
                 editor.selection.active
             );
 
-            const node: parser.SyntaxNode = getNodeAtLocation(location);
-
-            const position = findStatementEnd(editor, node);
-
-            setCursorPosition(editor, position);
+            setCursorPosition(editor, toPosition(statement.endPosition));
 
             jumpToCursor(editor);
         }
