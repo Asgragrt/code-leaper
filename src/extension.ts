@@ -1,6 +1,32 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import parser from 'web-tree-sitter';
+
+function toPosition(position: parser.Point) {
+    return new vscode.Position(position.row, position.column);
+}
+
+function endOfLine(
+    editor: vscode.TextEditor,
+    position: vscode.Position
+): boolean {
+    return position.isEqual(editor.document.lineAt(position.line).range.end);
+}
+
+function findStatementEnd(
+    editor: vscode.TextEditor,
+    node: parser.SyntaxNode
+): vscode.Position {
+    let currentNode: parser.SyntaxNode = node;
+    let currentPosition: vscode.Position = toPosition(currentNode.endPosition);
+    while (!endOfLine(editor, currentPosition)) {
+        if (!currentNode.parent) break;
+        currentNode = currentNode.parent;
+        currentPosition = toPosition(currentNode.endPosition);
+    }
+    return currentPosition;
+}
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -26,6 +52,46 @@ export function activate(context: vscode.ExtensionContext) {
 
             const cursorPosition = editor.selection.end;
 
+            const parseTreeExtension =
+                vscode.extensions.getExtension('pokey.parse-tree');
+
+            if (parseTreeExtension == null) {
+                throw new Error('Depends on pokey.parse-tree extension');
+            }
+
+            const { getNodeAtLocation } = await parseTreeExtension.activate();
+
+            const newRange = new vscode.Range(
+                editor.selection.start,
+                editor.selection.end
+            );
+
+            const location = new vscode.Location(editor.document.uri, newRange);
+
+            const node: parser.SyntaxNode = getNodeAtLocation(location);
+
+            // TODO check if descendants
+            /*
+            const lastChild = node.lastChild;
+            if (lastChild) {
+                const newPosition = new vscode.Position(
+                    lastChild.endPosition.row,
+                    lastChild.endPosition.column
+                );
+                setCursorPosition(editor, newPosition);
+                return;
+            }
+            */
+
+            const position = findStatementEnd(editor, node);
+
+            setCursorPosition(editor, position);
+
+            jumpToCursor(editor);
+
+            console.log(node);
+
+            /*
             // TODO set as option
             if (
                 editor.document.lineAt(editor.selection.end.line)
@@ -44,10 +110,17 @@ export function activate(context: vscode.ExtensionContext) {
             const position = editor.selection.active;
             const range = new vscode.Range(position, position);
             editor.revealRange(range, vscode.TextEditorRevealType.Default);
+            */
         }
     );
 
     context.subscriptions.push(disposable);
+}
+
+function jumpToCursor(editor: vscode.TextEditor) {
+    const position = editor.selection.active;
+    const range = new vscode.Range(position, position);
+    editor.revealRange(range, vscode.TextEditorRevealType.Default);
 }
 
 const lineSelect = function lineSelect(editor: vscode.TextEditor) {
