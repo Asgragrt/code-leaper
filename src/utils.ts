@@ -15,3 +15,24 @@ export function clampPositionToRange(
 
     return range.end;
 }
+
+export function setCursorPosition(
+    editor: vscode.TextEditor,
+    position: vscode.Position
+): void {
+    editor.selection = new vscode.Selection(position, position);
+}
+
+export function jumpToCursor(editor: vscode.TextEditor) {
+    const position = editor.selection.active;
+    const range = new vscode.Range(position, position);
+    editor.revealRange(range, vscode.TextEditorRevealType.Default);
+}
+
+export function moveCursor(
+    editor: vscode.TextEditor,
+    position: vscode.Position
+): void {
+    setCursorPosition(editor, position);
+    jumpToCursor(editor);
+}

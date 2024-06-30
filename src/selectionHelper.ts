@@ -2,10 +2,10 @@ import * as vscode from 'vscode';
 import parser from 'web-tree-sitter';
 import { toPosition, clampPositionToRange } from './utils';
 
+type getNodeAtLocation = (location: vscode.Location) => parser.SyntaxNode;
+
 export default class SelectionHelper {
-    private static getNodeAtLocation?: (
-        location: vscode.Location
-    ) => parser.SyntaxNode;
+    private static getNodeAtLocation?: getNodeAtLocation;
     private editor: vscode.TextEditor;
     private document: vscode.TextDocument;
 
@@ -26,13 +26,10 @@ export default class SelectionHelper {
                 throw new Error('Depends on pokey.parse-tree extension');
             }
 
-            const {
-                getNodeAtLocation,
-            }: {
-                getNodeAtLocation: (
-                    location: vscode.Location
-                ) => parser.SyntaxNode;
-            } = await parseTreeExtension.activate();
+            const { getNodeAtLocation } =
+                (await parseTreeExtension.activate()) as {
+                    getNodeAtLocation: getNodeAtLocation;
+                };
             console.log('Invoking pokey.parse-tree extension');
             SelectionHelper.getNodeAtLocation = getNodeAtLocation;
         }
@@ -78,7 +75,7 @@ export default class SelectionHelper {
         );
 
         // If EOL check if is the end of the statement
-        let newPosition = this.isEndOfLine(clampedPosition)
+        const newPosition = this.isEndOfLine(clampedPosition)
             ? clampedPosition.translate(0, -1)
             : clampedPosition;
 
@@ -99,13 +96,45 @@ export default class SelectionHelper {
         return nextStatement ? nextStatement : statementNode;
     }
 
+    async prevStatement(
+        startPosition: vscode.Position
+    ): Promise<parser.SyntaxNode> {
+        const clampedPosition = this.clampPositionToText(
+            this.isLineEmpty(startPosition.line)
+                ? this.prevNonEmptyLineStart(startPosition.line)
+                : startPosition
+        );
+
+        // If EOL check if is at the start of the line
+        const newPosition = this.isEndOfLine(clampedPosition)
+            ? clampedPosition.translate(0, -1)
+            : clampedPosition;
+
+        const baseNode = await this.getNode(newPosition);
+
+        // TODO fix this :D
+        const statementNode = this.growNodeToStatement(baseNode);
+
+        console.log(statementNode);
+
+        let prevStatement: parser.SyntaxNode | undefined;
+        // If the cursor was at the start of the statement jump to the previous
+        if (toPosition(statementNode.startPosition).isEqual(clampedPosition)) {
+            const prevPosition = this.prevNonEmptyLineStart(
+                clampedPosition.line
+            );
+            const prevBase = await this.getNode(prevPosition);
+            prevStatement = this.growNodeToStatement(prevBase);
+        }
+
+        return prevStatement ? prevStatement : statementNode;
+    }
+
     // Line utils
     private getLine(line: number): vscode.TextLine {
         return this.document.lineAt(line);
     }
 
-    private firstCharacterPosition(line: number): vscode.Position;
-    private firstCharacterPosition(position: vscode.Position): vscode.Position;
     private firstCharacterPosition(
         argument: vscode.Position | number
     ): vscode.Position {
@@ -115,8 +144,6 @@ export default class SelectionHelper {
         return new vscode.Position(line, column);
     }
 
-    private lastCharacterPosition(line: number): vscode.Position;
-    private lastCharacterPosition(position: vscode.Position): vscode.Position;
     private lastCharacterPosition(
         argument: vscode.Position | number
     ): vscode.Position {
@@ -126,8 +153,6 @@ export default class SelectionHelper {
         return new vscode.Position(line, text.trimEnd().length);
     }
 
-    private lineTextRange(line: number): vscode.Range;
-    private lineTextRange(position: vscode.Position): vscode.Range;
     private lineTextRange(argument: vscode.Position | number): vscode.Range {
         const line =
             argument instanceof vscode.Position ? argument.line : argument;
@@ -149,11 +174,15 @@ export default class SelectionHelper {
         return position.isEqual(this.lastCharacterPosition(position));
     }
 
-    private isLineEmpty(line: number): boolean {
+    private isLineEmpty(argument: vscode.Position | number): boolean {
+        const line =
+            argument instanceof vscode.Position ? argument.line : argument;
         return this.getLine(line).isEmptyOrWhitespace;
     }
 
-    private nextNonEmptyLine(currentLine: number): number {
+    private nextNonEmptyLine(argument: vscode.Position | number): number {
+        const currentLine =
+            argument instanceof vscode.Position ? argument.line : argument;
         let line = currentLine + 1;
         while (line < this.document.lineCount && this.isLineEmpty(line)) {
             line++;
@@ -162,13 +191,19 @@ export default class SelectionHelper {
         return line < this.document.lineCount ? line : currentLine;
     }
 
-    private nextNonEmptyLineStart(currentLine: number): vscode.Position {
+    private nextNonEmptyLineStart(
+        argument: vscode.Position | number
+    ): vscode.Position {
+        const currentLine =
+            argument instanceof vscode.Position ? argument.line : argument;
         const line = this.nextNonEmptyLine(currentLine);
 
         return this.firstCharacterPosition(line);
     }
 
-    private prevNonEmptyLine(currentLine: number): number {
+    private prevNonEmptyLine(argument: vscode.Position | number): number {
+        const currentLine =
+            argument instanceof vscode.Position ? argument.line : argument;
         let line = currentLine - 1;
         while (line >= 0 && this.isLineEmpty(line)) {
             line--;
@@ -177,7 +212,11 @@ export default class SelectionHelper {
         return line >= 0 ? line : currentLine;
     }
 
-    private prevNonEmptyLineStart(currentLine: number): vscode.Position {
+    private prevNonEmptyLineStart(
+        argument: vscode.Position | number
+    ): vscode.Position {
+        const currentLine =
+            argument instanceof vscode.Position ? argument.line : argument;
         const line = this.prevNonEmptyLine(currentLine);
 
         return this.firstCharacterPosition(line);

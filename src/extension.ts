@@ -2,11 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import SelectionHelper from './selectionHelper';
-import { toPosition } from './utils';
-
-function isCursorOnEmptyLine(editor: vscode.TextEditor) {
-    return isLineEmpty(editor, editor.selection.active.line);
-}
+import { toPosition, moveCursor } from './utils';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -28,62 +24,27 @@ export function activate(context: vscode.ExtensionContext) {
                 editor.selection.active
             );
 
-            setCursorPosition(editor, toPosition(statement.endPosition));
-
-            jumpToCursor(editor);
+            moveCursor(editor, toPosition(statement.endPosition));
         }
     );
 
     context.subscriptions.push(disposable);
-}
 
-function jumpToCursor(editor: vscode.TextEditor) {
-    const position = editor.selection.active;
-    const range = new vscode.Range(position, position);
-    editor.revealRange(range, vscode.TextEditorRevealType.Default);
-}
+    const disposable2 = vscode.commands.registerCommand(
+        'code-leaper.jumpPrevStatement',
+        async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) return;
 
-function isLineEmpty(editor: vscode.TextEditor, line: number): boolean {
-    return editor.document.lineAt(line).isEmptyOrWhitespace;
-}
+            const statement = await new SelectionHelper(editor).prevStatement(
+                editor.selection.active
+            );
 
-function goToNonEmptyLine(editor: vscode.TextEditor) {
-    const { document } = editor;
+            moveCursor(editor, toPosition(statement.startPosition));
+        }
+    );
 
-    let line = editor.selection.end.line + 1;
-    while (
-        line < document.lineCount &&
-        document.lineAt(line).isEmptyOrWhitespace
-    ) {
-        line++;
-    }
-    if (line >= document.lineCount) return;
-
-    const { firstNonWhitespaceCharacterIndex: column } = document.lineAt(line);
-    setCursorPosition(editor, line, column);
-}
-
-function setCursorPosition(
-    editor: vscode.TextEditor,
-    position: vscode.Position
-): void;
-function setCursorPosition(
-    editor: vscode.TextEditor,
-    line: number,
-    column: number
-): void;
-function setCursorPosition(
-    ...args:
-        | [vscode.TextEditor, vscode.Position]
-        | [vscode.TextEditor, number, number]
-): void {
-    if (args.length == 3) {
-        const newPosition = new vscode.Position(args[1], args[2]);
-        args[0].selection = new vscode.Selection(newPosition, newPosition);
-        return;
-    }
-
-    args[0].selection = new vscode.Selection(args[1], args[1]);
+    context.subscriptions.push(disposable2);
 }
 
 // This method is called when your extension is deactivated
