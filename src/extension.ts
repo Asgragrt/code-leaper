@@ -41,16 +41,8 @@ export function activate(context: vscode.ExtensionContext) {
     const disposable = vscode.commands.registerCommand(
         'code-leaper.helloWorld',
         async () => {
-            // The code you place here will be executed every time your command is executed
-            // Display a message box to the user
-            vscode.window.showInformationMessage(
-                'Hello World from Code Leaper!'
-            );
-
             const editor = vscode.window.activeTextEditor;
             if (!editor) return;
-
-            const cursorPosition = editor.selection.end;
 
             const parseTreeExtension =
                 vscode.extensions.getExtension('pokey.parse-tree');
@@ -70,47 +62,11 @@ export function activate(context: vscode.ExtensionContext) {
 
             const node: parser.SyntaxNode = getNodeAtLocation(location);
 
-            // TODO check if descendants
-            /*
-            const lastChild = node.lastChild;
-            if (lastChild) {
-                const newPosition = new vscode.Position(
-                    lastChild.endPosition.row,
-                    lastChild.endPosition.column
-                );
-                setCursorPosition(editor, newPosition);
-                return;
-            }
-            */
-
             const position = findStatementEnd(editor, node);
 
             setCursorPosition(editor, position);
 
             jumpToCursor(editor);
-
-            console.log(node);
-
-            /*
-            // TODO set as option
-            if (
-                editor.document.lineAt(editor.selection.end.line)
-                    .isEmptyOrWhitespace
-            ) {
-                goToNonEmptyLine(editor);
-            }
-
-            lineSelect(editor);
-
-            await growSelection(editor, cursorPosition);
-
-            setCursorPosition(editor, editor.selection.active);
-
-            // Reveal current cursor position
-            const position = editor.selection.active;
-            const range = new vscode.Range(position, position);
-            editor.revealRange(range, vscode.TextEditorRevealType.Default);
-            */
         }
     );
 
@@ -122,54 +78,6 @@ function jumpToCursor(editor: vscode.TextEditor) {
     const range = new vscode.Range(position, position);
     editor.revealRange(range, vscode.TextEditorRevealType.Default);
 }
-
-const lineSelect = function lineSelect(editor: vscode.TextEditor) {
-    const { document } = editor;
-
-    const selection = editor.selection;
-
-    const currentLine = selection.active.line;
-
-    if (document.lineAt(currentLine).isEmptyOrWhitespace) {
-        goToNonEmptyLine(editor);
-    }
-
-    const { start: lineStart, end: lineEnd } = getLinePosition(
-        document,
-        currentLine
-    );
-
-    const lineSelection = new vscode.Selection(lineEnd, lineStart);
-
-    editor.selection = lineSelection;
-};
-
-const growSelection = async function growSelection(
-    editor: vscode.TextEditor,
-    originalPosition: vscode.Position
-) {
-    const { document } = editor;
-    // Find better way of getting this expansion and check if command exists
-    await vscode.commands.executeCommand('editor.action.smartSelect.expand');
-
-    const { start: newStart, end: newEnd } = editor.selection;
-
-    if (
-        newStart.isEqual(newEnd) ||
-        document.lineAt(newEnd.line).isEmptyOrWhitespace ||
-        newEnd.isEqual(originalPosition)
-    ) {
-        goToNonEmptyLine(editor);
-        return;
-    }
-
-    if (newStart.character == 0) {
-        //setCursorPosition(editor, newEnd);
-        return;
-    }
-
-    await growSelection(editor, originalPosition);
-};
 
 function goToNonEmptyLine(editor: vscode.TextEditor) {
     const { document } = editor;
@@ -210,21 +118,7 @@ function setCursorPosition(
     args[0].selection = new vscode.Selection(args[1], args[1]);
 }
 
-const getLinePosition = function getLineTextRange(
-    document: vscode.TextDocument,
-    line: number
-): { start: vscode.Position; end: vscode.Position } {
-    const {
-        firstNonWhitespaceCharacterIndex: lineStart,
-        range: lineRange,
-        lineNumber,
-    } = document.lineAt(line);
-
-    return {
-        start: new vscode.Position(lineNumber, lineStart),
-        end: lineRange.end,
-    };
-};
-
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+    // empty
+}
