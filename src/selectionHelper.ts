@@ -4,6 +4,11 @@ import { toPosition, clampPositionToRange } from './utils';
 
 type getNodeAtLocation = (location: vscode.Location) => parser.SyntaxNode;
 
+export enum GoToFunctions {
+    nextNonEmpty = 'nextNonEmptyLineStart',
+    prevNonEmpty = 'prevNonEmptyLineStart',
+}
+
 export default class SelectionHelper {
     private static getNodeAtLocation?: getNodeAtLocation;
     private editor: vscode.TextEditor;
@@ -14,7 +19,7 @@ export default class SelectionHelper {
         this.document = editor.document;
     }
 
-    async getNode(
+    private async getNode(
         position: vscode.Position | vscode.Range
     ): Promise<parser.SyntaxNode> {
         if (!SelectionHelper.getNodeAtLocation) {
@@ -39,7 +44,7 @@ export default class SelectionHelper {
         return SelectionHelper.getNodeAtLocation(location);
     }
 
-    growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
+    private growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
         // TODO Clean this part
         let currentNode: parser.SyntaxNode = node;
         let currentEndPosition: vscode.Position = toPosition(
@@ -63,71 +68,10 @@ export default class SelectionHelper {
         return currentNode;
     }
 
-    //async getStatementAtNode
-
-    async nextStatement(
-        startPosition: vscode.Position
+    async getStatement(
+        position: vscode.Position | vscode.Range
     ): Promise<parser.SyntaxNode> {
-        const clampedPosition = this.clampPositionToText(
-            this.isLineEmpty(startPosition.line)
-                ? this.nextNonEmptyLineStart(startPosition.line)
-                : startPosition
-        );
-
-        // If EOL check if is the end of the statement
-        const newPosition = this.isEndOfLine(clampedPosition)
-            ? clampedPosition.translate(0, -1)
-            : clampedPosition;
-
-        const baseNode = await this.getNode(newPosition);
-
-        const statementNode = this.growNodeToStatement(baseNode);
-
-        let nextStatement: parser.SyntaxNode | undefined;
-        // If the cursor was at the end of the statement jump to the next
-        if (toPosition(statementNode.endPosition).isEqual(clampedPosition)) {
-            const nextPosition = this.nextNonEmptyLineStart(
-                clampedPosition.line
-            );
-            const nextBase = await this.getNode(nextPosition);
-            nextStatement = this.growNodeToStatement(nextBase);
-        }
-
-        return nextStatement ? nextStatement : statementNode;
-    }
-
-    async prevStatement(
-        startPosition: vscode.Position
-    ): Promise<parser.SyntaxNode> {
-        const clampedPosition = this.clampPositionToText(
-            this.isLineEmpty(startPosition.line)
-                ? this.prevNonEmptyLineStart(startPosition.line)
-                : startPosition
-        );
-
-        // If EOL go to previous character to avoid overgrowing
-        const newPosition = this.isEndOfLine(clampedPosition)
-            ? clampedPosition.translate(0, -1)
-            : clampedPosition;
-
-        const baseNode = await this.getNode(newPosition);
-
-        // TODO fix this :D
-        const statementNode = this.growNodeToStatement(baseNode);
-
-        console.log(statementNode);
-
-        let prevStatement: parser.SyntaxNode | undefined;
-        // If the cursor was at the start of the statement jump to the previous
-        if (toPosition(statementNode.startPosition).isEqual(clampedPosition)) {
-            const prevPosition = this.prevNonEmptyLineStart(
-                clampedPosition.line
-            );
-            const prevBase = await this.getNode(prevPosition);
-            prevStatement = this.growNodeToStatement(prevBase);
-        }
-
-        return prevStatement ? prevStatement : statementNode;
+        return this.growNodeToStatement(await this.getNode(position));
     }
 
     // Apply goTo to the position if the line is empty, then clamp it to the text

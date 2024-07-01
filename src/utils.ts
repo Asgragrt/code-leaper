@@ -36,3 +36,15 @@ export function moveCursor(
     setCursorPosition(editor, position);
     jumpToCursor(editor);
 }
+
+export function endPosition(node: parser.SyntaxNode): vscode.Position {
+    return toPosition(node.endPosition);
+}
+
+export function startPosition(node: parser.SyntaxNode): vscode.Position {
+    return toPosition(node.startPosition);
+}
+
+export function nodeRange(node: parser.SyntaxNode): vscode.Range {
+    return new vscode.Range(startPosition(node), endPosition(node));
+}

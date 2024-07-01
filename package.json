@@ -15,12 +15,19 @@
     "contributes": {
         "commands": [
             {
+                "category": "Leaper 💨",
                 "command": "code-leaper.jumpNextStatement",
-                "title": "Jump to next statement"
+                "title": "Jump to next"
             },
             {
+                "category": "Leaper 💨",
                 "command": "code-leaper.jumpPrevStatement",
-                "title": "Jump to previous statement"
+                "title": "Jump to previous"
+            },
+            {
+                "category": "Leaper 📜",
+                "command": "code-leaper.selectNextStatement",
+                "title": "Select next"
             }
         ]
     },
