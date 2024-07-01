@@ -100,8 +100,22 @@ export function activate(context: vscode.ExtensionContext) {
                 const range = nodeRange(statement);
 
                 editor.selection = new vscode.Selection(range.start, range.end);
-                
-                //moveCursor(editor, endPosition(statement));
+            }
+        )
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            'code-leaper.selectPrevStatement',
+            async () => {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) return;
+
+                const statement = await getPrevStatement(editor);
+
+                const range = nodeRange(statement);
+
+                editor.selection = new vscode.Selection(range.start, range.end);
             }
         )
     );

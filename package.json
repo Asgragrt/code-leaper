@@ -28,6 +28,11 @@
                 "category": "Leaper 📜",
                 "command": "code-leaper.selectNextStatement",
                 "title": "Select next"
+            },
+            {
+                "category": "Leaper 📜",
+                "command": "code-leaper.selectPrevStatement",
+                "title": "Select previous"
             }
         ]
     },
