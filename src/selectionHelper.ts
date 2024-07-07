@@ -19,27 +19,32 @@ export default class SelectionHelper {
         this.document = editor.document;
     }
 
-    private async getNode(
-        position: vscode.Position | vscode.Range
-    ): Promise<parser.SyntaxNode> {
-        if (!SelectionHelper.getNodeAtLocation) {
-            // Activate parse-tree extension
-            const parseTreeExtension =
-                vscode.extensions.getExtension('pokey.parse-tree');
+    async init(): Promise<undefined> {
+        if (SelectionHelper.getNodeAtLocation) return;
 
-            if (parseTreeExtension == null) {
-                throw new Error('Depends on pokey.parse-tree extension');
-            }
+        // Activate parse-tree extension
+        const parseTreeExtension =
+            vscode.extensions.getExtension('pokey.parse-tree');
 
-            const { getNodeAtLocation } =
-                (await parseTreeExtension.activate()) as {
-                    getNodeAtLocation: getNodeAtLocation;
-                };
-            console.log('Invoking pokey.parse-tree extension');
-            SelectionHelper.getNodeAtLocation = getNodeAtLocation;
+        if (parseTreeExtension == null) {
+            throw new Error('Depends on pokey.parse-tree extension');
         }
 
+        const { getNodeAtLocation } = (await parseTreeExtension.activate()) as {
+            getNodeAtLocation: getNodeAtLocation;
+        };
+        console.log('Invoking pokey.parse-tree extension');
+        SelectionHelper.getNodeAtLocation = getNodeAtLocation;
+    }
+
+    private getNode(
+        position: vscode.Position | vscode.Range
+    ): parser.SyntaxNode {
         const location = new vscode.Location(this.document.uri, position);
+
+        if (!SelectionHelper.getNodeAtLocation) {
+            throw new Error('Must init the extension first');
+        }
 
         return SelectionHelper.getNodeAtLocation(location);
     }

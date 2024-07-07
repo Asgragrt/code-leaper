@@ -12,6 +12,8 @@ async function getStatement(
 ) {
     const helper = new SelectionHelper(editor);
 
+    await helper.init();
+
     const goTo: (p: vscode.Position) => vscode.Position =
         helper[goToName].bind(helper);
 
@@ -26,13 +28,13 @@ async function getStatement(
         : processedPosition;
 
     // Get statement
-    const baseStatement = await helper.getStatement(offsetPosition);
+    const baseStatement = helper.getStatement(offsetPosition);
 
     // If the position of the statement is the same as the cursor position go to next
     let statement: parser.SyntaxNode | undefined;
     if (statementPosition(baseStatement).isEqual(processedPosition)) {
         const newPosition = goTo(processedPosition);
-        statement = await helper.getStatement(newPosition);
+        statement = helper.getStatement(newPosition);
     }
 
     return statement ? statement : baseStatement;
