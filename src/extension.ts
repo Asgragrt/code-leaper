@@ -23,7 +23,7 @@ async function getStatement(
     );
 
     // If EOL go to previous character to avoid overgrowing
-    const offsetPosition = helper.isEndOfLine(processedPosition)
+    const offsetPosition = helper.isE0LStrong(processedPosition)
         ? processedPosition.translate(0, -1)
         : processedPosition;
 

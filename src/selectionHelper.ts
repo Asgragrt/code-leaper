@@ -1,6 +1,12 @@
 import * as vscode from 'vscode';
 import parser from 'web-tree-sitter';
-import { toPosition, clampPositionToRange } from './utils';
+import {
+    toPosition,
+    clampPositionToRange,
+    nodeRange,
+    endPosition,
+    startPosition,
+} from './utils';
 
 type getNodeAtLocation = (location: vscode.Location) => parser.SyntaxNode;
 
@@ -60,29 +66,22 @@ export default class SelectionHelper {
         );
 
         while (
-            !(
-                this.isEndOfLine(currentEndPosition) ||
-                currentNode.nextSibling?.grammarType.includes('comment')
-            ) ||
-            !(
-                this.isStartOfLine(currentStartPosition) ||
-                currentNode.previousSibling?.grammarType.includes('comment')
-            ) ||
+            !this.isE0LStrong(currentEndPosition) ||
+            !this.isS0LStrong(currentStartPosition) ||
             currentNode.childCount == 0
         ) {
             if (!currentNode.parent) break;
             currentNode = currentNode.parent;
             currentEndPosition = toPosition(currentNode.endPosition);
             currentStartPosition = toPosition(currentNode.startPosition);
+            //console.log(this.isEndOfLine2(currentEndPosition));
         }
 
         return currentNode;
     }
 
-    async getStatement(
-        position: vscode.Position | vscode.Range
-    ): Promise<parser.SyntaxNode> {
-        return this.growNodeToStatement(await this.getNode(position));
+    getStatement(position: vscode.Position | vscode.Range): parser.SyntaxNode {
+        return this.growNodeToStatement(this.getNode(position));
     }
 
     // Apply goTo to the position if the line is empty, then clamp it to the text
@@ -93,7 +92,7 @@ export default class SelectionHelper {
         const goPosition = this.isLineEmpty(position)
             ? goTo(position)
             : position;
-        return this.clampPositionToText(goPosition);
+        return this.clampPositionToTextStrong(goPosition);
     }
 
     // Line utils
@@ -130,12 +129,108 @@ export default class SelectionHelper {
         return clampPositionToRange(position, this.lineTextRange(position));
     }
 
-    isStartOfLine(position: vscode.Position): boolean {
+    isSOL(position: vscode.Position): boolean {
         return position.isEqual(this.firstCharacterPosition(position));
     }
 
-    isEndOfLine(position: vscode.Position): boolean {
+    isEOL(position: vscode.Position): boolean {
         return position.isEqual(this.lastCharacterPosition(position));
+    }
+
+    // ! Rename Strong functions
+
+    isS0LStrong(position: vscode.Position): boolean {
+        const sol = this.getSOL(position);
+        return sol.isAfterOrEqual(position);
+    }
+
+    isE0LStrong(position: vscode.Position): boolean {
+        const eol = this.getEOL(position);
+        return eol.isBeforeOrEqual(position);
+    }
+
+    lineTextRangeStrong(argument: vscode.Position | number): vscode.Range {
+        const line =
+            argument instanceof vscode.Position ? argument.line : argument;
+        return new vscode.Range(this.getSOL(line), this.getEOL(line));
+    }
+
+    clampPositionToTextStrong(position: vscode.Position): vscode.Position {
+        return clampPositionToRange(
+            position,
+            this.lineTextRangeStrong(position)
+        );
+    }
+
+    getLineNodes(line: number): parser.SyntaxNode[] {
+        if (line < 0) throw new RangeError('line out of bounds');
+
+        const rootNode = this.getNode(new vscode.Position(line, 0)).tree
+            .rootNode;
+        const nodesOnLine: parser.SyntaxNode[] = [];
+
+        const collectNodes = function collectNodes(
+            currentNode: parser.SyntaxNode
+        ) {
+            // ? Maybe expand this condition
+            if (currentNode.startPosition.row === line) {
+                nodesOnLine.push(currentNode);
+            }
+
+            const range = nodeRange(currentNode);
+
+            const inRange = range.start.line <= line && range.end.line >= line;
+
+            if (!inRange) return;
+
+            currentNode.children.forEach((child) => {
+                collectNodes(child);
+            });
+        };
+
+        collectNodes(rootNode);
+
+        return nodesOnLine.filter(
+            (node) => !node.grammarType.includes('comment')
+        );
+    }
+
+    // SOL => Start of line
+    getSOL(argument: vscode.Position | number | parser.SyntaxNode[]) {
+        let nodes: parser.SyntaxNode[];
+        let line: number;
+        if (argument instanceof Array) {
+            nodes = argument;
+            line = nodes[0].startPosition.row;
+        } else {
+            line =
+                argument instanceof vscode.Position ? argument.line : argument;
+            nodes = this.getLineNodes(line);
+        }
+
+        return nodes.length > 0
+            ? startPosition(nodes[0])
+            : this.firstCharacterPosition(line);
+    }
+
+    getEOL(
+        argument: vscode.Position | number | parser.SyntaxNode[]
+    ): vscode.Position {
+        let nodes: parser.SyntaxNode[];
+        let line: number;
+        if (argument instanceof Array) {
+            nodes = argument;
+            line = nodes[0].startPosition.row;
+        } else {
+            line =
+                argument instanceof vscode.Position ? argument.line : argument;
+            nodes = this.getLineNodes(line);
+        }
+
+        const lastNode = nodes.pop();
+        return lastNode
+            ? endPosition(lastNode)
+            : this.lastCharacterPosition(line);
     }
 
     isLineEmpty(argument: vscode.Position | number): boolean {
