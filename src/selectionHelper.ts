@@ -3,7 +3,7 @@ import parser from 'web-tree-sitter';
 import {
     toPosition,
     clampPositionToRange,
-    nodeRange,
+    // nodeRange,
     endPosition,
     startPosition,
 } from './utils';
@@ -60,23 +60,19 @@ export default class SelectionHelper {
     private growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
         // TODO Clean this part
         let currentNode: parser.SyntaxNode = node;
-        let currentEndPosition: vscode.Position = toPosition(
-            currentNode.endPosition
-        );
-        let currentStartPosition: vscode.Position = toPosition(
-            currentNode.startPosition
-        );
+        let end: vscode.Position = toPosition(currentNode.endPosition);
+        let start: vscode.Position = toPosition(currentNode.startPosition);
 
         // TODO add option to jump between smaller items
         while (
-            !this.isE0LStrong(currentEndPosition) ||
-            !this.isS0LStrong(currentStartPosition) ||
+            !this.isE0LStrong(end) ||
+            !this.isS0LStrong(start) ||
             currentNode.childCount == 0
         ) {
             if (!currentNode.parent) break;
             currentNode = currentNode.parent;
-            currentEndPosition = toPosition(currentNode.endPosition);
-            currentStartPosition = toPosition(currentNode.startPosition);
+            end = toPosition(currentNode.endPosition);
+            start = toPosition(currentNode.startPosition);
         }
 
         return currentNode;
@@ -179,22 +175,20 @@ export default class SelectionHelper {
                 nodesOnLine.push(currentNode);
             }
 
-            const range = nodeRange(currentNode);
-
-            const inRange = range.start.line <= line && range.end.line >= line;
-
-            if (!inRange) return;
-
-            currentNode.children.forEach((child) => {
-                collectNodes(child);
-            });
+            for (const child of currentNode.children) {
+                if (
+                    child.startPosition.row <= line &&
+                    child.endPosition.row >= line &&
+                    !child.grammarType.includes('comment')
+                ) {
+                    collectNodes(child);
+                }
+            }
         };
 
         collectNodes(rootNode);
 
-        return nodesOnLine.filter(
-            (node) => !node.grammarType.includes('comment')
-        );
+        return nodesOnLine;
     }
 
     // SOL => Start of line
@@ -272,12 +266,9 @@ export default class SelectionHelper {
                 nodesAfterLine.push(currentNode);
             }
 
-            // TODO improve this
-            Array.from(currentNode.children)
-                .reverse()
-                .forEach((child) => {
-                    collectNodes(child);
-                });
+            for (let i = currentNode.childCount - 1; i >= 0; i--) {
+                collectNodes(currentNode.children[i]);
+            }
         };
 
         collectNodes(rootNode);
@@ -305,11 +296,12 @@ export default class SelectionHelper {
                 !currentNode.grammarType.includes('comment')
             ) {
                 nodesAfterLine.push(currentNode);
+                return;
             }
 
-            currentNode.children.forEach((child) => {
+            for (const child of currentNode.children) {
                 collectNodes(child);
-            });
+            }
         };
 
         collectNodes(rootNode);
