@@ -55,8 +55,14 @@ export default class SelectionHelper {
         );
 
         while (
-            !this.isEndOfLine(currentEndPosition) ||
-            !this.isStartOfLine(currentStartPosition) ||
+            !(
+                this.isEndOfLine(currentEndPosition) ||
+                currentNode.nextSibling?.grammarType.includes('comment')
+            ) ||
+            !(
+                this.isStartOfLine(currentStartPosition) ||
+                currentNode.previousSibling?.grammarType.includes('comment')
+            ) ||
             currentNode.childCount == 0
         ) {
             if (!currentNode.parent) break;
