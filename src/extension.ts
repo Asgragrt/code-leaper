@@ -41,13 +41,13 @@ async function getStatement(
 }
 
 async function getNextStatement(editor: vscode.TextEditor) {
-    return await getStatement(editor, GoToFunctions.nextNonEmpty, endPosition);
+    return await getStatement(editor, GoToFunctions.nextNonEmpty2, endPosition);
 }
 
 async function getPrevStatement(editor: vscode.TextEditor) {
     return await getStatement(
         editor,
-        GoToFunctions.prevNonEmpty,
+        GoToFunctions.prevNonEmpty2,
         startPosition
     );
 }

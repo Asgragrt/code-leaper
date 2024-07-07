@@ -12,7 +12,9 @@ type getNodeAtLocation = (location: vscode.Location) => parser.SyntaxNode;
 
 export enum GoToFunctions {
     nextNonEmpty = 'nextNonEmptyLineStart',
+    nextNonEmpty2 = 'nextStart',
     prevNonEmpty = 'prevNonEmptyLineStart',
+    prevNonEmpty2 = 'prevEnd',
 }
 
 export default class SelectionHelper {
@@ -250,11 +252,77 @@ export default class SelectionHelper {
         return line < this.document.lineCount ? line : currentLine;
     }
 
+    prevEnd(argument: vscode.Position | number): vscode.Position {
+        const currentLine =
+            argument instanceof vscode.Position ? argument.line : argument;
+        const rootNode = this.getNode(new vscode.Position(currentLine, 0)).tree
+            .rootNode;
+        const nodesAfterLine: parser.SyntaxNode[] = [];
+
+        const collectNodes = function collectNodes(
+            currentNode: parser.SyntaxNode
+        ) {
+            if (nodesAfterLine.length > 0) return;
+
+            // ? Maybe expand this condition
+            if (
+                currentNode.endPosition.row < currentLine &&
+                !currentNode.grammarType.includes('comment')
+            ) {
+                nodesAfterLine.push(currentNode);
+            }
+
+            // TODO improve this
+            Array.from(currentNode.children)
+                .reverse()
+                .forEach((child) => {
+                    collectNodes(child);
+                });
+        };
+
+        collectNodes(rootNode);
+
+        return nodesAfterLine.length > 0
+            ? startPosition(nodesAfterLine[0])
+            : this.getEOL(currentLine);
+    }
+
+    nextStart(argument: vscode.Position | number): vscode.Position {
+        const currentLine =
+            argument instanceof vscode.Position ? argument.line : argument;
+        const rootNode = this.getNode(new vscode.Position(currentLine, 0)).tree
+            .rootNode;
+        const nodesAfterLine: parser.SyntaxNode[] = [];
+
+        const collectNodes = function collectNodes(
+            currentNode: parser.SyntaxNode
+        ) {
+            if (nodesAfterLine.length > 0) return;
+
+            // ? Maybe expand this condition
+            if (
+                currentNode.startPosition.row > currentLine &&
+                !currentNode.grammarType.includes('comment')
+            ) {
+                nodesAfterLine.push(currentNode);
+            }
+
+            currentNode.children.forEach((child) => {
+                collectNodes(child);
+            });
+        };
+
+        collectNodes(rootNode);
+
+        return nodesAfterLine.length > 0
+            ? startPosition(nodesAfterLine[0])
+            : this.getEOL(currentLine);
+    }
+
     nextNonEmptyLineStart(argument: vscode.Position | number): vscode.Position {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
         const line = this.nextNonEmptyLine(currentLine);
-
         return this.firstCharacterPosition(line);
     }
 
