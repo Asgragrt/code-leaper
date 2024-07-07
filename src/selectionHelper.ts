@@ -67,6 +67,7 @@ export default class SelectionHelper {
             currentNode.startPosition
         );
 
+        // TODO add option to jump between smaller items
         while (
             !this.isE0LStrong(currentEndPosition) ||
             !this.isS0LStrong(currentStartPosition) ||
@@ -76,7 +77,6 @@ export default class SelectionHelper {
             currentNode = currentNode.parent;
             currentEndPosition = toPosition(currentNode.endPosition);
             currentStartPosition = toPosition(currentNode.startPosition);
-            //console.log(this.isEndOfLine2(currentEndPosition));
         }
 
         return currentNode;

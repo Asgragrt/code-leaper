@@ -71,6 +71,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 const statement = await getNextStatement(editor);
 
+                // TODO add option to jump to start/end of statement when moving between statements
                 moveCursor(editor, endPosition(statement));
             }
         )
@@ -117,7 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 const range = nodeRange(statement);
 
-                editor.selection = new vscode.Selection(range.start, range.end);
+                editor.selection = new vscode.Selection(range.end, range.start);
             }
         )
     );
