@@ -28,19 +28,21 @@ export function activate(context: vscode.ExtensionContext) {
 
                 const basePosition = editor.selection.active;
 
-                // Go to next line if its the end of the line
-                const position =
-                    helper.isLineEmpty(basePosition) ||
-                    helper.isEOL(basePosition)
-                        ? helper.nextStart(basePosition)
-                        : basePosition;
+                // Go to next non-empty line (ignoring comments)
+                const position = helper.isLineEmpty(basePosition)
+                    ? helper.nextStart(basePosition)
+                    : basePosition;
 
-                const baseStatementRange = helper.getCurrentStatement(position);
+                let range = helper.getCurrentStatement(position);
 
-                editor.selection = new vscode.Selection(
-                    baseStatementRange.start,
-                    baseStatementRange.end
-                );
+                if (position.isEqual(range.end)) {
+                    range = helper.getCurrentStatement(
+                        helper.nextStart(position)
+                    );
+                }
+
+                moveCursor(editor, range.end);
+                //moveCursor(editor, (await getNext(editor)).end);
             }
         )
     );
