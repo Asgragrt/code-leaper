@@ -1,56 +1,9 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import SelectionHelper, { GoToFunctions } from './selectionHelper';
-import { moveCursor, endPosition, startPosition, nodeRange } from './utils';
-import parser from 'web-tree-sitter';
-
-async function getStatement(
-    editor: vscode.TextEditor,
-    goToName: GoToFunctions,
-    statementPosition: (node: parser.SyntaxNode) => vscode.Position
-) {
-    const helper = new SelectionHelper(editor);
-
-    await helper.init();
-
-    const goTo: (p: vscode.Position) => vscode.Position =
-        helper[goToName].bind(helper);
-
-    const processedPosition = helper.processPosition(
-        editor.selection.active,
-        goTo
-    );
-
-    // If EOL go to previous character to avoid overgrowing
-    const offsetPosition = helper.isE0LStrong(processedPosition)
-        ? processedPosition.translate(0, -1)
-        : processedPosition;
-
-    // Get statement
-    const baseStatement = helper.getStatement(offsetPosition);
-
-    // If the position of the statement is the same as the cursor position go to next
-    let statement: parser.SyntaxNode | undefined;
-    if (statementPosition(baseStatement).isEqual(processedPosition)) {
-        const newPosition = goTo(processedPosition);
-        statement = helper.getStatement(newPosition);
-    }
-
-    return statement ? statement : baseStatement;
-}
-
-async function getNextStatement(editor: vscode.TextEditor) {
-    return await getStatement(editor, GoToFunctions.nextNonEmpty2, endPosition);
-}
-
-async function getPrevStatement(editor: vscode.TextEditor) {
-    return await getStatement(
-        editor,
-        GoToFunctions.prevNonEmpty2,
-        startPosition
-    );
-}
+import SelectionHelper from './selectionHelper';
+///import { moveCursor, endPosition, startPosition, nodeRange } from './utils';
+//import parser from 'web-tree-sitter';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -69,15 +22,30 @@ export function activate(context: vscode.ExtensionContext) {
                 const editor = vscode.window.activeTextEditor;
                 if (!editor) return;
 
-                const statement = await getNextStatement(editor);
+                const helper = new SelectionHelper(editor);
 
-                // TODO add option to jump to start/end of statement when moving between statements
-                moveCursor(editor, endPosition(statement));
+                await helper.init();
+
+                const basePosition = editor.selection.active;
+
+                // Go to next line if its the end of the line
+                const position =
+                    helper.isLineEmpty(basePosition) ||
+                    helper.isEOL(basePosition)
+                        ? helper.nextStart(basePosition)
+                        : basePosition;
+
+                const baseStatementRange = helper.getCurrentStatement(position);
+
+                editor.selection = new vscode.Selection(
+                    baseStatementRange.start,
+                    baseStatementRange.end
+                );
             }
         )
     );
 
-    context.subscriptions.push(
+    /* context.subscriptions.push(
         vscode.commands.registerCommand(
             'code-leaper.jumpPrevStatement',
             async () => {
@@ -121,7 +89,7 @@ export function activate(context: vscode.ExtensionContext) {
                 editor.selection = new vscode.Selection(range.end, range.start);
             }
         )
-    );
+    ); */
 }
 
 // This method is called when your extension is deactivated
