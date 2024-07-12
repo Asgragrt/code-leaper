@@ -2,20 +2,13 @@ import * as vscode from 'vscode';
 import parser from 'web-tree-sitter';
 import {
     clampPositionToRange,
-    // nodeRange,
+    nodeRange,
     endPosition,
     startPosition,
 } from './utils';
 
 type getNodeAtLocation = (location: vscode.Location) => parser.SyntaxNode;
 type getTree = (document: vscode.TextDocument) => parser.Tree;
-
-export enum GoToFunctions {
-    nextNonEmpty = 'nextNonEmptyLineStart',
-    nextNonEmpty2 = 'nextStart',
-    prevNonEmpty = 'prevNonEmptyLineStart',
-    prevNonEmpty2 = 'prevEnd',
-}
 
 export default class SelectionHelper {
     private static getNodeAtLocation?: getNodeAtLocation;
@@ -67,7 +60,54 @@ export default class SelectionHelper {
         return SelectionHelper.getNodeAtLocation(location);
     }
 
-    // Line utils
+    getCurrentStatement(
+        position: vscode.Position | vscode.Range
+    ): vscode.Range {
+        const line =
+            position instanceof vscode.Range
+                ? position.end.line
+                : position.line;
+
+        //console.log(line + 1);
+        //console.log(this.document.languageId);
+
+        const relatedNodes = this.getLineNodes(line).filter(
+            (n) => !!n.parent && n.endPosition.column != 0
+        );
+
+        //console.log(relatedNodes);
+
+        if (!relatedNodes[0]) throw new Error('No valid nodes');
+
+        let baseNode = relatedNodes[0];
+
+        let baseRange = nodeRange(baseNode);
+
+        // ! TODO EOL may be wrong sometimes when the \r character is part of the node in C
+        if (
+            !this.isSOL(baseRange.start) &&
+            !this.isEOL(baseRange.end) &&
+            baseNode.parent
+        ) {
+            baseNode = baseNode.parent;
+            baseRange = nodeRange(baseNode);
+        }
+
+        let sibling = baseNode.nextSibling;
+        while (
+            !this.isEOL(baseRange.end) &&
+            !!sibling /* && !sibling.isNamed */
+        ) {
+            if (!sibling.grammarType.includes('comment')) {
+                baseRange = baseRange.union(nodeRange(sibling));
+            }
+            sibling = sibling.nextSibling;
+        }
+
+        return baseRange;
+    }
+
+    // ! Line utils
     private getLine(line: number): vscode.TextLine {
         return this.document.lineAt(line);
     }
