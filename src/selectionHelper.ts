@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import parser from 'web-tree-sitter';
 import {
-    toPosition,
     clampPositionToRange,
     // nodeRange,
     endPosition,
@@ -66,42 +65,6 @@ export default class SelectionHelper {
         }
 
         return SelectionHelper.getNodeAtLocation(location);
-    }
-
-    private growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
-        // TODO Clean this part
-        let currentNode: parser.SyntaxNode = node;
-        let end: vscode.Position = toPosition(currentNode.endPosition);
-        let start: vscode.Position = toPosition(currentNode.startPosition);
-
-        // TODO add option to jump between smaller items
-        while (
-            !this.isE0LStrong(end) ||
-            !this.isS0LStrong(start) ||
-            currentNode.childCount == 0
-        ) {
-            if (!currentNode.parent) break;
-            currentNode = currentNode.parent;
-            end = toPosition(currentNode.endPosition);
-            start = toPosition(currentNode.startPosition);
-        }
-
-        return currentNode;
-    }
-
-    getStatement(position: vscode.Position | vscode.Range): parser.SyntaxNode {
-        return this.growNodeToStatement(this.getNode(position));
-    }
-
-    // Apply goTo to the position if the line is empty, then clamp it to the text
-    processPosition(
-        position: vscode.Position,
-        goTo: (p: vscode.Position) => vscode.Position
-    ) {
-        const goPosition = this.isLineEmpty(position)
-            ? goTo(position)
-            : position;
-        return this.clampPositionToTextStrong(goPosition);
     }
 
     // Line utils
@@ -208,6 +171,7 @@ export default class SelectionHelper {
         let line: number;
         if (argument instanceof Array) {
             nodes = argument;
+            if (!nodes[0]) throw new Error('No valid nodes');
             line = nodes[0].startPosition.row;
         } else {
             line =
@@ -215,7 +179,7 @@ export default class SelectionHelper {
             nodes = this.getLineNodes(line);
         }
 
-        return nodes.length > 0
+        return nodes[0]
             ? startPosition(nodes[0])
             : this.firstCharacterPosition(line);
     }
@@ -227,6 +191,7 @@ export default class SelectionHelper {
         let line: number;
         if (argument instanceof Array) {
             nodes = argument;
+            if (!nodes[0]) throw new Error('No valid nodes');
             line = nodes[0].startPosition.row;
         } else {
             line =
@@ -260,8 +225,7 @@ export default class SelectionHelper {
     prevEnd(argument: vscode.Position | number): vscode.Position {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
-        const rootNode = this.getNode(new vscode.Position(currentLine, 0)).tree
-            .rootNode;
+        const rootNode = this.getRootNode();
         const nodesAfterLine: parser.SyntaxNode[] = [];
 
         const collectNodes = function collectNodes(
@@ -278,13 +242,15 @@ export default class SelectionHelper {
             }
 
             for (let i = currentNode.childCount - 1; i >= 0; i--) {
-                collectNodes(currentNode.children[i]);
+                const child = currentNode.child(i);
+                if (!child) continue;
+                collectNodes(child);
             }
         };
 
         collectNodes(rootNode);
 
-        return nodesAfterLine.length > 0
+        return nodesAfterLine[0]
             ? startPosition(nodesAfterLine[0])
             : this.getEOL(currentLine);
     }
@@ -292,8 +258,7 @@ export default class SelectionHelper {
     nextStart(argument: vscode.Position | number): vscode.Position {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
-        const rootNode = this.getNode(new vscode.Position(currentLine, 0)).tree
-            .rootNode;
+        const rootNode = this.getRootNode();
         const nodesAfterLine: parser.SyntaxNode[] = [];
 
         const collectNodes = function collectNodes(
@@ -310,14 +275,17 @@ export default class SelectionHelper {
                 return;
             }
 
-            for (const child of currentNode.children) {
+            const childCount = currentNode.childCount;
+            for (let i = 0; i < childCount; i++) {
+                const child = currentNode.child(i);
+                if (!child) continue;
                 collectNodes(child);
             }
         };
 
         collectNodes(rootNode);
 
-        return nodesAfterLine.length > 0
+        return nodesAfterLine[0]
             ? startPosition(nodesAfterLine[0])
             : this.getEOL(currentLine);
     }
