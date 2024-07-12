@@ -12,7 +12,9 @@ const languages: Record<string, string[]> = {
     python: ['block'],
 } as const;
 
-type getNodeAtLocation = (location: vscode.Location) => parser.SyntaxNode;
+type Node = parser.SyntaxNode;
+
+type getNodeAtLocation = (location: vscode.Location) => Node;
 type getTree = (document: vscode.TextDocument) => parser.Tree;
 
 export default class SelectionHelper {
@@ -49,15 +51,13 @@ export default class SelectionHelper {
         SelectionHelper.getTree = getTree;
     }
 
-    private getRootNode(): parser.SyntaxNode {
+    private getRootNode(): Node {
         if (!SelectionHelper.getTree)
             throw new Error('Must init the extension first');
         return SelectionHelper.getTree(this.document).rootNode;
     }
 
-    private getNode(
-        position: vscode.Position | vscode.Range
-    ): parser.SyntaxNode {
+    private getNode(position: vscode.Position | vscode.Range): Node {
         const location = new vscode.Location(this.document.uri, position);
 
         if (!SelectionHelper.getNodeAtLocation) {
@@ -159,16 +159,14 @@ export default class SelectionHelper {
         return clampPositionToRange(position, this.lineTextRange(position));
     }
 
-    private getLineNodes(line: number): parser.SyntaxNode[] {
+    private getLineNodes(line: number): Node[] {
         if (line < 0 || line >= this.document.lineCount)
             throw new RangeError('line out of bounds');
 
         const rootNode = this.getRootNode();
-        const nodesOnLine: parser.SyntaxNode[] = [];
+        const nodesOnLine: Node[] = [];
 
-        const collectNodes = function collectNodes(
-            currentNode: parser.SyntaxNode
-        ) {
+        const collectNodes = function collectNodes(currentNode: Node) {
             if (
                 currentNode.startPosition.row === line ||
                 currentNode.endPosition.row === line
@@ -195,16 +193,14 @@ export default class SelectionHelper {
         return nodesOnLine;
     }
 
-    private getLineStartNodes(line: number): parser.SyntaxNode[] {
+    private getLineStartNodes(line: number): Node[] {
         if (line < 0 || line >= this.document.lineCount)
             throw new RangeError('line out of bounds');
 
         const rootNode = this.getRootNode();
-        const nodesOnLine: parser.SyntaxNode[] = [];
+        const nodesOnLine: Node[] = [];
 
-        const collectNodes = function collectNodes(
-            currentNode: parser.SyntaxNode
-        ) {
+        const collectNodes = function collectNodes(currentNode: Node) {
             // ? Maybe expand this condition
             if (currentNode.startPosition.row === line) {
                 nodesOnLine.push(currentNode);
@@ -230,8 +226,8 @@ export default class SelectionHelper {
     }
 
     // SOL => Start of line
-    getSOL(argument: vscode.Position | number | parser.SyntaxNode[]) {
-        let nodes: parser.SyntaxNode[];
+    getSOL(argument: vscode.Position | number | Node[]) {
+        let nodes: Node[];
         let line: number;
         if (argument instanceof Array) {
             nodes = argument;
@@ -248,10 +244,8 @@ export default class SelectionHelper {
             : this.firstCharacterPosition(line);
     }
 
-    getEOL(
-        argument: vscode.Position | number | parser.SyntaxNode[]
-    ): vscode.Position {
-        let nodes: parser.SyntaxNode[];
+    getEOL(argument: vscode.Position | number | Node[]): vscode.Position {
+        let nodes: Node[];
         let line: number;
         if (argument instanceof Array) {
             nodes = argument;
@@ -291,11 +285,9 @@ export default class SelectionHelper {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
         const rootNode = this.getRootNode();
-        const nodesAfterLine: parser.SyntaxNode[] = [];
+        const nodesAfterLine: Node[] = [];
 
-        const collectNodes = function collectNodes(
-            currentNode: parser.SyntaxNode
-        ) {
+        const collectNodes = function collectNodes(currentNode: Node) {
             if (nodesAfterLine.length > 0) return;
 
             // ? Maybe expand this condition
@@ -324,11 +316,9 @@ export default class SelectionHelper {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
         const rootNode = this.getRootNode();
-        const nodesAfterLine: parser.SyntaxNode[] = [];
+        const nodesAfterLine: Node[] = [];
 
-        const collectNodes = function collectNodes(
-            currentNode: parser.SyntaxNode
-        ) {
+        const collectNodes = function collectNodes(currentNode: Node) {
             if (nodesAfterLine.length > 0) return;
 
             // ? Maybe expand this condition
