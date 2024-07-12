@@ -9,6 +9,7 @@ import {
 } from './utils';
 
 type getNodeAtLocation = (location: vscode.Location) => parser.SyntaxNode;
+type getTree = (document: vscode.TextDocument) => parser.Tree;
 
 export enum GoToFunctions {
     nextNonEmpty = 'nextNonEmptyLineStart',
@@ -19,6 +20,7 @@ export enum GoToFunctions {
 
 export default class SelectionHelper {
     private static getNodeAtLocation?: getNodeAtLocation;
+    private static getTree?: getTree;
     private editor: vscode.TextEditor;
     private document: vscode.TextDocument;
 
@@ -38,11 +40,20 @@ export default class SelectionHelper {
             throw new Error('Depends on pokey.parse-tree extension');
         }
 
-        const { getNodeAtLocation } = (await parseTreeExtension.activate()) as {
-            getNodeAtLocation: getNodeAtLocation;
-        };
+        const { getNodeAtLocation, getTree } =
+            (await parseTreeExtension.activate()) as {
+                getNodeAtLocation: getNodeAtLocation;
+                getTree: getTree;
+            };
         console.log('Invoking pokey.parse-tree extension');
         SelectionHelper.getNodeAtLocation = getNodeAtLocation;
+        SelectionHelper.getTree = getTree;
+    }
+
+    private getRootNode(): parser.SyntaxNode {
+        if (!SelectionHelper.getTree)
+            throw new Error('Must init the extension first');
+        return SelectionHelper.getTree(this.document).rootNode;
     }
 
     private getNode(
