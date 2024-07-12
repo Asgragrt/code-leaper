@@ -7,6 +7,11 @@ import {
     startPosition,
 } from './utils';
 
+const languages: Record<string, string[]> = {
+    haskell: ['declarations'],
+    python: ['block'],
+} as const;
+
 type getNodeAtLocation = (location: vscode.Location) => parser.SyntaxNode;
 type getTree = (document: vscode.TextDocument) => parser.Tree;
 
@@ -15,10 +20,12 @@ export default class SelectionHelper {
     private static getTree?: getTree;
     private editor: vscode.TextEditor;
     private document: vscode.TextDocument;
+    private languageId: string;
 
     constructor(editor: vscode.TextEditor) {
         this.editor = editor;
         this.document = editor.document;
+        this.languageId = this.document.languageId;
     }
 
     async init(): Promise<undefined> {
@@ -60,6 +67,12 @@ export default class SelectionHelper {
         return SelectionHelper.getNodeAtLocation(location);
     }
 
+    private excludeNode(s: string): boolean {
+        const grammars = languages[this.languageId];
+        if (!grammars) return false;
+        return grammars.some((node) => node === s);
+    }
+
     getCurrentStatement(
         position: vscode.Position | vscode.Range
     ): vscode.Range {
@@ -72,7 +85,10 @@ export default class SelectionHelper {
         //console.log(this.document.languageId);
 
         const relatedNodes = this.getLineNodes(line).filter(
-            (n) => !!n.parent && n.endPosition.column != 0
+            (n) =>
+                !!n.parent &&
+                n.endPosition.column != 0 &&
+                !this.excludeNode(n.grammarType)
         );
 
         //console.log(relatedNodes);
