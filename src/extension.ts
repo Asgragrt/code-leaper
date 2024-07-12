@@ -26,7 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 await helper.init();
 
-                const basePosition = editor.selection.active;
+                const basePosition = editor.selection.end;
 
                 // Go to next non-empty line (ignoring comments)
                 const position = helper.isLineEmpty(basePosition)
@@ -35,7 +35,9 @@ export function activate(context: vscode.ExtensionContext) {
 
                 let range = helper.getCurrentStatement(position);
 
-                if (position.isEqual(range.end)) {
+                // Clamp to ignore characters such as \r\n
+                // Go to next statement if at the end of statement
+                if (position.isEqual(helper.clampToLine(range.end))) {
                     range = helper.getCurrentStatement(
                         helper.nextStart(position)
                     );

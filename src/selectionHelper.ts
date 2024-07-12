@@ -155,7 +155,7 @@ export default class SelectionHelper {
         );
     }
 
-    private clampToLine(position: vscode.Position): vscode.Position {
+    clampToLine(position: vscode.Position): vscode.Position {
         return clampPositionToRange(position, this.lineTextRange(position));
     }
 
