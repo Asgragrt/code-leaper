@@ -99,11 +99,13 @@ export default class SelectionHelper {
 
         let baseRange = nodeRange(baseNode);
 
-        // ! TODO EOL may be wrong sometimes when the \r character is part of the node in C
         if (
-            !this.isSOL(baseRange.start) &&
-            !this.isEOL(baseRange.end) &&
-            baseNode.parent
+            baseNode.parent &&
+            ((!this.isSOL(baseRange.start) && !this.isEOL(baseRange.end)) ||
+                (!baseNode.isNamed && // ? Clean this condition
+                    baseNode.endPosition.column -
+                        baseNode.startPosition.column ==
+                        1))
         ) {
             baseNode = baseNode.parent;
             baseRange = nodeRange(baseNode);
