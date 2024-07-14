@@ -48,3 +48,7 @@ export function startPosition(node: parser.SyntaxNode): vscode.Position {
 export function nodeRange(node: parser.SyntaxNode): vscode.Range {
     return new vscode.Range(startPosition(node), endPosition(node));
 }
+
+export function isComment(node: parser.SyntaxNode): boolean {
+    return node.grammarType.includes('comment');
+}

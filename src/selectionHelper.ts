@@ -5,6 +5,7 @@ import {
     nodeRange,
     endPosition,
     startPosition,
+    isComment,
 } from './utils';
 
 const languages: Record<string, string[]> = {
@@ -80,9 +81,9 @@ export default class SelectionHelper {
     private excludeNode(n: Node): boolean {
         const grammars = languages[this.languageId];
         const grammar = n.grammarType;
-        const isComment = grammar.includes('comment');
-        if (!grammars) return isComment;
-        return isComment || grammars.some((type) => type === grammar);
+        const isNodeComment = isComment(n);
+        if (!grammars) return isNodeComment;
+        return isNodeComment || grammars.some((type) => type === grammar);
     }
 
     private getLineNode(line: number): Node | null {
@@ -160,7 +161,7 @@ export default class SelectionHelper {
             !this.isEOL(baseRange.end) &&
             !!sibling /* && !sibling.isNamed */
         ) {
-            if (!sibling.grammarType.includes('comment')) {
+            if (!isComment(sibling)) {
                 baseRange = baseRange.union(nodeRange(sibling));
             }
             sibling = sibling.nextSibling;
@@ -225,7 +226,7 @@ export default class SelectionHelper {
                 if (
                     child.startPosition.row <= line &&
                     child.endPosition.row >= line &&
-                    !child.grammarType.includes('comment')
+                    !isComment(child)
                 ) {
                     collectNodes(child);
                 }
@@ -304,7 +305,7 @@ export default class SelectionHelper {
 
             if (
                 currentNode.endPosition.row < currentLine &&
-                !currentNode.grammarType.includes('comment')
+                !isComment(currentNode)
             ) {
                 node = currentNode;
                 return;
@@ -333,7 +334,7 @@ export default class SelectionHelper {
 
             if (
                 currentNode.startPosition.row > currentLine &&
-                !currentNode.grammarType.includes('comment')
+                !isComment(currentNode)
             ) {
                 node = currentNode;
                 return;
