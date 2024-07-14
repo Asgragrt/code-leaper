@@ -318,32 +318,30 @@ export default class SelectionHelper {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
         const rootNode = this.getRootNode();
-        const nodesAfterLine: Node[] = [];
+        let node: Node | undefined;
 
         const collectNodes = function collectNodes(currentNode: Node) {
-            if (nodesAfterLine.length > 0) return;
+            if (node) return;
 
             // ? Maybe expand this condition
             if (
                 currentNode.startPosition.row > currentLine &&
                 !currentNode.grammarType.includes('comment')
             ) {
-                nodesAfterLine.push(currentNode);
+                node = currentNode;
                 return;
             }
 
             const childCount = currentNode.childCount;
             for (let i = 0; i < childCount; i++) {
-                const child = currentNode.child(i);
-                if (!child) continue;
-                collectNodes(child);
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                const child = currentNode.child(i)!;
+                if (child.endPosition.row > currentLine) collectNodes(child);
             }
         };
 
         collectNodes(rootNode);
 
-        return nodesAfterLine[0]
-            ? startPosition(nodesAfterLine[0])
-            : this.getEOL(currentLine);
+        return node ? startPosition(node) : this.getEOL(currentLine);
     }
 }
