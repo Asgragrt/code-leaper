@@ -5,7 +5,7 @@ import { moveCursor } from './utils';
 function nextStatement(editor: vscode.TextEditor) {
     const helper = new SelectionHelper(editor);
 
-    const basePosition = editor.selection.end;
+    const basePosition = editor.selection.active;
 
     // Go to next non-empty line (ignoring comments)
     const position = helper.isLineEmpty(basePosition)
@@ -28,7 +28,7 @@ function nextStatement(editor: vscode.TextEditor) {
 function prevStatement(editor: vscode.TextEditor) {
     const helper = new SelectionHelper(editor);
 
-    const basePosition = editor.selection.start;
+    const basePosition = editor.selection.active;
 
     // Go to next non-empty line (ignoring comments)
     const position = helper.isLineEmpty(basePosition)
