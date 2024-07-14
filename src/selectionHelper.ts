@@ -77,10 +77,57 @@ export default class SelectionHelper {
         return SelectionHelper.getNodeAtLocation(location);
     }
 
-    private excludeNode(s: string): boolean {
+    private excludeNode(n: Node): boolean {
         const grammars = languages[this.languageId];
-        if (!grammars) return false;
-        return grammars.some((node) => node === s);
+        const grammar = n.grammarType;
+        const isComment = grammar.includes('comment');
+        if (!grammars) return isComment;
+        return isComment || grammars.some((type) => type === grammar);
+    }
+
+    private getLineNode(line: number): Node | null {
+        if (line < 0 || line >= this.document.lineCount)
+            throw new RangeError('line out of bounds');
+
+        const rootNode = this.root;
+        let node: Node | null = null;
+
+        const collectNodes = function collectNodes(
+            helper: SelectionHelper,
+            currentNode: Node
+        ) {
+            const nodeOnLine =
+                currentNode.startPosition.row === line ||
+                currentNode.endPosition.row === line;
+
+            if (
+                nodeOnLine &&
+                currentNode.parent &&
+                currentNode.endPosition.column != 0 &&
+                !helper.excludeNode(currentNode)
+            ) {
+                node = currentNode;
+                return;
+            }
+
+            const childCount = currentNode.childCount;
+            for (let i = 0; i < childCount; i++) {
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                const child = currentNode.child(i)!;
+                if (
+                    child.startPosition.row <= line &&
+                    child.endPosition.row >= line
+                ) {
+                    collectNodes(helper, child);
+                }
+
+                if (node) break;
+            }
+        };
+
+        collectNodes(this, rootNode);
+
+        return node;
     }
 
     getCurrentStatement(
@@ -91,21 +138,8 @@ export default class SelectionHelper {
                 ? position.end.line
                 : position.line;
 
-        //console.log(line + 1);
-        //console.log(this.document.languageId);
-
-        const relatedNodes = this.getLineNodes(line).filter(
-            (n) =>
-                !!n.parent &&
-                n.endPosition.column != 0 &&
-                !this.excludeNode(n.grammarType)
-        );
-
-        //console.log(relatedNodes);
-
-        if (!relatedNodes[0]) throw new Error('No valid nodes');
-
-        let baseNode = relatedNodes[0];
+        let baseNode = this.getLineNode(line);
+        if (!baseNode) throw new Error('No valid nodes');
 
         let baseRange = nodeRange(baseNode);
 
@@ -169,40 +203,6 @@ export default class SelectionHelper {
 
     clampToLine(position: vscode.Position): vscode.Position {
         return clampPositionToRange(position, this.lineTextRange(position));
-    }
-
-    private getLineNodes(line: number): Node[] {
-        if (line < 0 || line >= this.document.lineCount)
-            throw new RangeError('line out of bounds');
-
-        const rootNode = this.root;
-        const nodesOnLine: Node[] = [];
-
-        const collectNodes = function collectNodes(currentNode: Node) {
-            if (
-                currentNode.startPosition.row === line ||
-                currentNode.endPosition.row === line
-            ) {
-                nodesOnLine.push(currentNode);
-            }
-
-            const childCount = currentNode.childCount;
-            for (let i = 0; i < childCount; i++) {
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                const child = currentNode.child(i)!;
-                if (
-                    child.startPosition.row <= line &&
-                    child.endPosition.row >= line &&
-                    !child.grammarType.includes('comment')
-                ) {
-                    collectNodes(child);
-                }
-            }
-        };
-
-        collectNodes(rootNode);
-
-        return nodesOnLine;
     }
 
     private getLineStartNodes(line: number): Node[] {
