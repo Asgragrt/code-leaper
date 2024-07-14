@@ -30,8 +30,8 @@ export default class SelectionHelper {
         this.languageId = this.document.languageId;
     }
 
-    async init(): Promise<undefined> {
-        if (SelectionHelper.getNodeAtLocation) return;
+    static async init(): Promise<undefined> {
+        if (this.isInit) return;
 
         // Activate parse-tree extension
         const parseTreeExtension =
@@ -47,8 +47,9 @@ export default class SelectionHelper {
                 getTree: getTree;
             };
         console.log('Invoking pokey.parse-tree extension');
-        SelectionHelper.getNodeAtLocation = getNodeAtLocation;
-        SelectionHelper.getTree = getTree;
+        this.getNodeAtLocation = getNodeAtLocation;
+        this.getTree = getTree;
+        this.isInit = true;
     }
 
     private getRootNode(): Node {
