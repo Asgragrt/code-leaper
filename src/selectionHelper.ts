@@ -29,11 +29,13 @@ export default class SelectionHelper {
     private editor: vscode.TextEditor;
     private document: vscode.TextDocument;
     private languageId: string;
+    private readonly root: Node;
 
     constructor(editor: vscode.TextEditor) {
         this.editor = editor;
         this.document = editor.document;
         this.languageId = this.document.languageId;
+        this.root = this.getRoot();
     }
 
     static async init(): Promise<undefined> {
@@ -58,15 +60,11 @@ export default class SelectionHelper {
         this._isInit = true;
     }
 
-    private getRootNode(): Node {
+    private getRoot(): Node {
         if (!SelectionHelper.getTree)
             throw new Error('Must init the extension first');
 
-        if (!this.root) {
-            this.root = SelectionHelper.getTree(this.document).rootNode;
-        }
-
-        return this.root;
+        return SelectionHelper.getTree(this.document).rootNode;
     }
 
     private getNode(position: vscode.Position | vscode.Range): Node {
@@ -177,7 +175,7 @@ export default class SelectionHelper {
         if (line < 0 || line >= this.document.lineCount)
             throw new RangeError('line out of bounds');
 
-        const rootNode = this.getRootNode();
+        const rootNode = this.root;
         const nodesOnLine: Node[] = [];
 
         const collectNodes = function collectNodes(currentNode: Node) {
@@ -211,7 +209,7 @@ export default class SelectionHelper {
         if (line < 0 || line >= this.document.lineCount)
             throw new RangeError('line out of bounds');
 
-        const rootNode = this.getRootNode();
+        const rootNode = this.root;
         const nodesOnLine: Node[] = [];
 
         const collectNodes = function collectNodes(currentNode: Node) {
@@ -298,7 +296,7 @@ export default class SelectionHelper {
     prevEnd(argument: vscode.Position | number): vscode.Position {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
-        const rootNode = this.getRootNode();
+        const rootNode = this.root;
         const nodesAfterLine: Node[] = [];
 
         const collectNodes = function collectNodes(currentNode: Node) {
@@ -329,7 +327,7 @@ export default class SelectionHelper {
     nextStart(argument: vscode.Position | number): vscode.Position {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
-        const rootNode = this.getRootNode();
+        const rootNode = this.root;
         let node: Node | undefined;
 
         const collectNodes = function collectNodes(currentNode: Node) {
