@@ -25,9 +25,9 @@ export function activate(context: vscode.ExtensionContext) {
 
                 const initStart = performance.now();
 
-                const helper = new SelectionHelper(editor);
-
                 if (!SelectionHelper.isInit) await SelectionHelper.init();
+
+                const helper = new SelectionHelper(editor);
 
                 const initEnd = performance.now();
 

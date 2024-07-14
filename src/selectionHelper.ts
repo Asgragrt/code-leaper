@@ -20,6 +20,12 @@ type getTree = (document: vscode.TextDocument) => parser.Tree;
 export default class SelectionHelper {
     private static getNodeAtLocation?: getNodeAtLocation;
     private static getTree?: getTree;
+    private static _isInit = false;
+
+    public static get isInit() {
+        return this._isInit;
+    }
+
     private editor: vscode.TextEditor;
     private document: vscode.TextDocument;
     private languageId: string;
@@ -31,7 +37,7 @@ export default class SelectionHelper {
     }
 
     static async init(): Promise<undefined> {
-        if (this.isInit) return;
+        if (this._isInit) return;
 
         // Activate parse-tree extension
         const parseTreeExtension =
@@ -49,13 +55,18 @@ export default class SelectionHelper {
         console.log('Invoking pokey.parse-tree extension');
         this.getNodeAtLocation = getNodeAtLocation;
         this.getTree = getTree;
-        this.isInit = true;
+        this._isInit = true;
     }
 
     private getRootNode(): Node {
         if (!SelectionHelper.getTree)
             throw new Error('Must init the extension first');
-        return SelectionHelper.getTree(this.document).rootNode;
+
+        if (!this.root) {
+            this.root = SelectionHelper.getTree(this.document).rootNode;
+        }
+
+        return this.root;
     }
 
     private getNode(position: vscode.Position | vscode.Range): Node {
