@@ -113,9 +113,9 @@ export default class SelectionHelper {
 
             const childCount = currentNode.childCount;
             for (let i = 0; i < childCount; i++) {
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                const child = currentNode.child(i)!;
+                const child = currentNode.child(i);
                 if (
+                    child &&
                     child.startPosition.row <= line &&
                     child.endPosition.row >= line
                 ) {
@@ -221,9 +221,9 @@ export default class SelectionHelper {
 
             const childCount = currentNode.childCount;
             for (let i = 0; i < childCount; i++) {
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                const child = currentNode.child(i)!;
+                const child = currentNode.child(i);
                 if (
+                    child &&
                     child.startPosition.row <= line &&
                     child.endPosition.row >= line &&
                     !isComment(child)
@@ -312,9 +312,9 @@ export default class SelectionHelper {
             }
 
             for (let i = currentNode.childCount - 1; i >= 0; i--) {
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                const child = currentNode.child(i)!;
-                if (child.startPosition.row < currentLine) collectNodes(child);
+                const child = currentNode.child(i);
+                if (child && child.startPosition.row < currentLine)
+                    collectNodes(child);
             }
         };
 
@@ -342,9 +342,9 @@ export default class SelectionHelper {
 
             const childCount = currentNode.childCount;
             for (let i = 0; i < childCount; i++) {
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                const child = currentNode.child(i)!;
-                if (child.endPosition.row > currentLine) collectNodes(child);
+                const child = currentNode.child(i);
+                if (child && child.endPosition.row > currentLine)
+                    collectNodes(child);
             }
         };
 
