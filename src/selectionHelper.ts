@@ -1,34 +1,46 @@
 import * as vscode from 'vscode';
 import parser from 'web-tree-sitter';
 import {
-    toPosition,
     clampPositionToRange,
-    // nodeRange,
+    nodeRange,
     endPosition,
     startPosition,
+    isComment,
 } from './utils';
 
-type getNodeAtLocation = (location: vscode.Location) => parser.SyntaxNode;
+const languages: Record<string, string[]> = {
+    haskell: ['declarations'],
+    python: ['block'],
+} as const;
 
-export enum GoToFunctions {
-    nextNonEmpty = 'nextNonEmptyLineStart',
-    nextNonEmpty2 = 'nextStart',
-    prevNonEmpty = 'prevNonEmptyLineStart',
-    prevNonEmpty2 = 'prevEnd',
-}
+type Node = parser.SyntaxNode;
+
+type getNodeAtLocation = (location: vscode.Location) => Node;
+type getTree = (document: vscode.TextDocument) => parser.Tree;
 
 export default class SelectionHelper {
     private static getNodeAtLocation?: getNodeAtLocation;
+    private static getTree?: getTree;
+    private static _isInit = false;
+
+    public static get isInit() {
+        return this._isInit;
+    }
+
     private editor: vscode.TextEditor;
     private document: vscode.TextDocument;
+    private languageId: string;
+    private readonly root: Node;
 
     constructor(editor: vscode.TextEditor) {
         this.editor = editor;
         this.document = editor.document;
+        this.languageId = this.document.languageId;
+        this.root = this.getRoot();
     }
 
-    async init(): Promise<undefined> {
-        if (SelectionHelper.getNodeAtLocation) return;
+    static async init(): Promise<undefined> {
+        if (this._isInit) return;
 
         // Activate parse-tree extension
         const parseTreeExtension =
@@ -38,16 +50,25 @@ export default class SelectionHelper {
             throw new Error('Depends on pokey.parse-tree extension');
         }
 
-        const { getNodeAtLocation } = (await parseTreeExtension.activate()) as {
-            getNodeAtLocation: getNodeAtLocation;
-        };
+        const { getNodeAtLocation, getTree } =
+            (await parseTreeExtension.activate()) as {
+                getNodeAtLocation: getNodeAtLocation;
+                getTree: getTree;
+            };
         console.log('Invoking pokey.parse-tree extension');
-        SelectionHelper.getNodeAtLocation = getNodeAtLocation;
+        this.getNodeAtLocation = getNodeAtLocation;
+        this.getTree = getTree;
+        this._isInit = true;
     }
 
-    private getNode(
-        position: vscode.Position | vscode.Range
-    ): parser.SyntaxNode {
+    private getRoot(): Node {
+        if (!SelectionHelper.getTree)
+            throw new Error('Must init the extension first');
+
+        return SelectionHelper.getTree(this.document).rootNode;
+    }
+
+    private getNode(position: vscode.Position | vscode.Range): Node {
         const location = new vscode.Location(this.document.uri, position);
 
         if (!SelectionHelper.getNodeAtLocation) {
@@ -57,48 +78,104 @@ export default class SelectionHelper {
         return SelectionHelper.getNodeAtLocation(location);
     }
 
-    private growNodeToStatement(node: parser.SyntaxNode): parser.SyntaxNode {
-        // TODO Clean this part
-        let currentNode: parser.SyntaxNode = node;
-        let end: vscode.Position = toPosition(currentNode.endPosition);
-        let start: vscode.Position = toPosition(currentNode.startPosition);
+    private excludeNode(n: Node): boolean {
+        const grammars = languages[this.languageId];
+        const grammar = n.grammarType;
+        const isNodeComment = isComment(n);
+        if (!grammars) return isNodeComment;
+        return isNodeComment || grammars.some((type) => type === grammar);
+    }
 
-        // TODO add option to jump between smaller items
-        while (
-            !this.isE0LStrong(end) ||
-            !this.isS0LStrong(start) ||
-            currentNode.childCount == 0
+    private getLineNode(line: number): Node | null {
+        if (line < 0 || line >= this.document.lineCount)
+            throw new RangeError('line out of bounds');
+
+        const rootNode = this.root;
+        let node: Node | null = null;
+
+        const collectNodes = function collectNodes(
+            helper: SelectionHelper,
+            currentNode: Node
         ) {
-            if (!currentNode.parent) break;
-            currentNode = currentNode.parent;
-            end = toPosition(currentNode.endPosition);
-            start = toPosition(currentNode.startPosition);
+            const nodeOnLine =
+                currentNode.startPosition.row === line ||
+                currentNode.endPosition.row === line;
+
+            if (
+                nodeOnLine &&
+                currentNode.parent &&
+                currentNode.endPosition.column != 0 &&
+                !helper.excludeNode(currentNode)
+            ) {
+                node = currentNode;
+                return;
+            }
+
+            const childCount = currentNode.childCount;
+            for (let i = 0; i < childCount; i++) {
+                const child = currentNode.child(i);
+                if (
+                    child &&
+                    child.startPosition.row <= line &&
+                    child.endPosition.row >= line
+                ) {
+                    collectNodes(helper, child);
+                }
+
+                if (node) break;
+            }
+        };
+
+        collectNodes(this, rootNode);
+
+        return node;
+    }
+
+    getCurrentStatement(
+        position: vscode.Position | vscode.Range
+    ): vscode.Range {
+        const line =
+            position instanceof vscode.Range
+                ? position.end.line
+                : position.line;
+
+        let baseNode = this.getLineNode(line);
+        if (!baseNode) throw new Error('No valid nodes');
+
+        let baseRange = nodeRange(baseNode);
+
+        if (
+            baseNode.parent &&
+            ((!this.isSOL(baseRange.start) && !this.isEOL(baseRange.end)) ||
+                (!baseNode.isNamed && // ? Clean this condition
+                    baseNode.endPosition.column -
+                        baseNode.startPosition.column ==
+                        1))
+        ) {
+            baseNode = baseNode.parent;
+            baseRange = nodeRange(baseNode);
         }
 
-        return currentNode;
+        let sibling = baseNode.nextSibling;
+        while (
+            !this.isEOL(baseRange.end) &&
+            !!sibling /* && !sibling.isNamed */
+        ) {
+            if (!isComment(sibling)) {
+                baseRange = baseRange.union(nodeRange(sibling));
+            }
+            sibling = sibling.nextSibling;
+        }
+
+        return baseRange;
     }
 
-    getStatement(position: vscode.Position | vscode.Range): parser.SyntaxNode {
-        return this.growNodeToStatement(this.getNode(position));
-    }
-
-    // Apply goTo to the position if the line is empty, then clamp it to the text
-    processPosition(
-        position: vscode.Position,
-        goTo: (p: vscode.Position) => vscode.Position
-    ) {
-        const goPosition = this.isLineEmpty(position)
-            ? goTo(position)
-            : position;
-        return this.clampPositionToTextStrong(goPosition);
-    }
-
-    // Line utils
-    getLine(line: number): vscode.TextLine {
+    // ! Line utils
+    private getLine(line: number): vscode.TextLine {
         return this.document.lineAt(line);
     }
 
-    firstCharacterPosition(
+    private firstCharacterPosition(
         argument: vscode.Position | number
     ): vscode.Position {
         const line =
@@ -107,14 +184,16 @@ export default class SelectionHelper {
         return new vscode.Position(line, column);
     }
 
-    lastCharacterPosition(argument: vscode.Position | number): vscode.Position {
+    private lastCharacterPosition(
+        argument: vscode.Position | number
+    ): vscode.Position {
         const line =
             argument instanceof vscode.Position ? argument.line : argument;
         const { text } = this.getLine(line);
         return new vscode.Position(line, text.trimEnd().length);
     }
 
-    lineTextRange(argument: vscode.Position | number): vscode.Range {
+    private lineTextRange(argument: vscode.Position | number): vscode.Range {
         const line =
             argument instanceof vscode.Position ? argument.line : argument;
         return new vscode.Range(
@@ -123,63 +202,31 @@ export default class SelectionHelper {
         );
     }
 
-    clampPositionToText(position: vscode.Position): vscode.Position {
+    clampToLine(position: vscode.Position): vscode.Position {
         return clampPositionToRange(position, this.lineTextRange(position));
     }
 
-    isSOL(position: vscode.Position): boolean {
-        return position.isEqual(this.firstCharacterPosition(position));
-    }
+    private getLineStartNodes(line: number): Node[] {
+        if (line < 0 || line >= this.document.lineCount)
+            throw new RangeError('line out of bounds');
 
-    isEOL(position: vscode.Position): boolean {
-        return position.isEqual(this.lastCharacterPosition(position));
-    }
+        const rootNode = this.root;
+        const nodesOnLine: Node[] = [];
 
-    // ! Rename Strong functions
-
-    isS0LStrong(position: vscode.Position): boolean {
-        const sol = this.getSOL(position);
-        return sol.isAfterOrEqual(position);
-    }
-
-    isE0LStrong(position: vscode.Position): boolean {
-        const eol = this.getEOL(position);
-        return eol.isBeforeOrEqual(position);
-    }
-
-    lineTextRangeStrong(argument: vscode.Position | number): vscode.Range {
-        const line =
-            argument instanceof vscode.Position ? argument.line : argument;
-        return new vscode.Range(this.getSOL(line), this.getEOL(line));
-    }
-
-    clampPositionToTextStrong(position: vscode.Position): vscode.Position {
-        return clampPositionToRange(
-            position,
-            this.lineTextRangeStrong(position)
-        );
-    }
-
-    getLineNodes(line: number): parser.SyntaxNode[] {
-        if (line < 0) throw new RangeError('line out of bounds');
-
-        const rootNode = this.getNode(new vscode.Position(line, 0)).tree
-            .rootNode;
-        const nodesOnLine: parser.SyntaxNode[] = [];
-
-        const collectNodes = function collectNodes(
-            currentNode: parser.SyntaxNode
-        ) {
+        const collectNodes = function collectNodes(currentNode: Node) {
             // ? Maybe expand this condition
             if (currentNode.startPosition.row === line) {
                 nodesOnLine.push(currentNode);
             }
 
-            for (const child of currentNode.children) {
+            const childCount = currentNode.childCount;
+            for (let i = 0; i < childCount; i++) {
+                const child = currentNode.child(i);
                 if (
+                    child &&
                     child.startPosition.row <= line &&
                     child.endPosition.row >= line &&
-                    !child.grammarType.includes('comment')
+                    !isComment(child)
                 ) {
                     collectNodes(child);
                 }
@@ -192,35 +239,35 @@ export default class SelectionHelper {
     }
 
     // SOL => Start of line
-    getSOL(argument: vscode.Position | number | parser.SyntaxNode[]) {
-        let nodes: parser.SyntaxNode[];
+    getSOL(argument: vscode.Position | number | Node[]) {
+        let nodes: Node[];
         let line: number;
         if (argument instanceof Array) {
             nodes = argument;
+            if (!nodes[0]) throw new Error('No valid nodes');
             line = nodes[0].startPosition.row;
         } else {
             line =
                 argument instanceof vscode.Position ? argument.line : argument;
-            nodes = this.getLineNodes(line);
+            nodes = this.getLineStartNodes(line);
         }
 
-        return nodes.length > 0
+        return nodes[0]
             ? startPosition(nodes[0])
             : this.firstCharacterPosition(line);
     }
 
-    getEOL(
-        argument: vscode.Position | number | parser.SyntaxNode[]
-    ): vscode.Position {
-        let nodes: parser.SyntaxNode[];
+    getEOL(argument: vscode.Position | number | Node[]): vscode.Position {
+        let nodes: Node[];
         let line: number;
         if (argument instanceof Array) {
             nodes = argument;
+            if (!nodes[0]) throw new Error('No valid nodes');
             line = nodes[0].startPosition.row;
         } else {
             line =
                 argument instanceof vscode.Position ? argument.line : argument;
-            nodes = this.getLineNodes(line);
+            nodes = this.getLineStartNodes(line);
         }
 
         const lastNode = nodes.pop();
@@ -232,108 +279,77 @@ export default class SelectionHelper {
     isLineEmpty(argument: vscode.Position | number): boolean {
         const line =
             argument instanceof vscode.Position ? argument.line : argument;
-        return this.getLine(line).isEmptyOrWhitespace;
+        return this.getLine(line).isEmptyOrWhitespace
+            ? true
+            : this.getLineStartNodes(line).length == 0;
     }
 
-    nextNonEmptyLine(argument: vscode.Position | number): number {
-        const currentLine =
-            argument instanceof vscode.Position ? argument.line : argument;
-        let line = currentLine + 1;
-        while (line < this.document.lineCount && this.isLineEmpty(line)) {
-            line++;
-        }
+    isSOL(position: vscode.Position): boolean {
+        const sol = this.getSOL(position);
+        return sol.isAfterOrEqual(position);
+    }
 
-        return line < this.document.lineCount ? line : currentLine;
+    isEOL(position: vscode.Position): boolean {
+        const eol = this.getEOL(position);
+        return eol.isBeforeOrEqual(position);
     }
 
     prevEnd(argument: vscode.Position | number): vscode.Position {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
-        const rootNode = this.getNode(new vscode.Position(currentLine, 0)).tree
-            .rootNode;
-        const nodesAfterLine: parser.SyntaxNode[] = [];
+        const rootNode = this.root;
+        let node: Node | undefined;
 
-        const collectNodes = function collectNodes(
-            currentNode: parser.SyntaxNode
-        ) {
-            if (nodesAfterLine.length > 0) return;
+        const collectNodes = function collectNodes(currentNode: Node) {
+            if (node) return;
 
-            // ? Maybe expand this condition
             if (
                 currentNode.endPosition.row < currentLine &&
-                !currentNode.grammarType.includes('comment')
+                !isComment(currentNode)
             ) {
-                nodesAfterLine.push(currentNode);
+                node = currentNode;
+                return;
             }
 
             for (let i = currentNode.childCount - 1; i >= 0; i--) {
-                collectNodes(currentNode.children[i]);
+                const child = currentNode.child(i);
+                if (child && child.startPosition.row < currentLine)
+                    collectNodes(child);
             }
         };
 
         collectNodes(rootNode);
 
-        return nodesAfterLine.length > 0
-            ? startPosition(nodesAfterLine[0])
-            : this.getEOL(currentLine);
+        return node ? startPosition(node) : this.getEOL(currentLine);
     }
 
     nextStart(argument: vscode.Position | number): vscode.Position {
         const currentLine =
             argument instanceof vscode.Position ? argument.line : argument;
-        const rootNode = this.getNode(new vscode.Position(currentLine, 0)).tree
-            .rootNode;
-        const nodesAfterLine: parser.SyntaxNode[] = [];
+        const rootNode = this.root;
+        let node: Node | undefined;
 
-        const collectNodes = function collectNodes(
-            currentNode: parser.SyntaxNode
-        ) {
-            if (nodesAfterLine.length > 0) return;
+        const collectNodes = function collectNodes(currentNode: Node) {
+            if (node) return;
 
-            // ? Maybe expand this condition
             if (
                 currentNode.startPosition.row > currentLine &&
-                !currentNode.grammarType.includes('comment')
+                !isComment(currentNode)
             ) {
-                nodesAfterLine.push(currentNode);
+                node = currentNode;
                 return;
             }
 
-            for (const child of currentNode.children) {
-                collectNodes(child);
+            const childCount = currentNode.childCount;
+            for (let i = 0; i < childCount; i++) {
+                const child = currentNode.child(i);
+                if (child && child.endPosition.row > currentLine)
+                    collectNodes(child);
             }
         };
 
         collectNodes(rootNode);
 
-        return nodesAfterLine.length > 0
-            ? startPosition(nodesAfterLine[0])
-            : this.getEOL(currentLine);
-    }
-
-    nextNonEmptyLineStart(argument: vscode.Position | number): vscode.Position {
-        const currentLine =
-            argument instanceof vscode.Position ? argument.line : argument;
-        const line = this.nextNonEmptyLine(currentLine);
-        return this.firstCharacterPosition(line);
-    }
-
-    prevNonEmptyLine(argument: vscode.Position | number): number {
-        const currentLine =
-            argument instanceof vscode.Position ? argument.line : argument;
-        let line = currentLine - 1;
-        while (line >= 0 && this.isLineEmpty(line)) {
-            line--;
-        }
-
-        return line >= 0 ? line : currentLine;
-    }
-
-    prevNonEmptyLineStart(argument: vscode.Position | number): vscode.Position {
-        const currentLine =
-            argument instanceof vscode.Position ? argument.line : argument;
-        const line = this.prevNonEmptyLine(currentLine);
-
-        return this.firstCharacterPosition(line);
+        return node ? startPosition(node) : this.getEOL(currentLine);
     }
 }

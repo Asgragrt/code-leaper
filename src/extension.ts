@@ -1,108 +1,87 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import SelectionHelper, { GoToFunctions } from './selectionHelper';
-import { moveCursor, endPosition, startPosition, nodeRange } from './utils';
-import parser from 'web-tree-sitter';
+import SelectionHelper from './selectionHelper';
+import { moveCursor } from './utils';
 
-async function getStatement(
-    editor: vscode.TextEditor,
-    goToName: GoToFunctions,
-    statementPosition: (node: parser.SyntaxNode) => vscode.Position
-) {
+function nextStatement(editor: vscode.TextEditor) {
     const helper = new SelectionHelper(editor);
 
-    await helper.init();
+    const basePosition = editor.selection.active;
 
-    const goTo: (p: vscode.Position) => vscode.Position =
-        helper[goToName].bind(helper);
+    // Go to next non-empty line (ignoring comments)
+    const position = helper.isLineEmpty(basePosition)
+        ? helper.nextStart(basePosition)
+        : basePosition;
 
-    const processedPosition = helper.processPosition(
-        editor.selection.active,
-        goTo
-    );
+    let range = helper.getCurrentStatement(position);
 
-    // If EOL go to previous character to avoid overgrowing
-    const offsetPosition = helper.isE0LStrong(processedPosition)
-        ? processedPosition.translate(0, -1)
-        : processedPosition;
-
-    // Get statement
-    const baseStatement = helper.getStatement(offsetPosition);
-
-    // If the position of the statement is the same as the cursor position go to next
-    let statement: parser.SyntaxNode | undefined;
-    if (statementPosition(baseStatement).isEqual(processedPosition)) {
-        const newPosition = goTo(processedPosition);
-        statement = helper.getStatement(newPosition);
+    // Clamp to ignore characters such as \r\n
+    // Go to next statement if at the end of statement
+    if (position.isEqual(helper.clampToLine(range.end))) {
+        range = helper.getCurrentStatement(helper.nextStart(position));
     }
 
-    return statement ? statement : baseStatement;
+    // Improve selection by getting the largest at the end (should help overall)
+    range = helper.getCurrentStatement(range.end);
+
+    return range;
+}
+function prevStatement(editor: vscode.TextEditor) {
+    const helper = new SelectionHelper(editor);
+
+    const basePosition = editor.selection.active;
+
+    // Go to next non-empty line (ignoring comments)
+    const position = helper.isLineEmpty(basePosition)
+        ? helper.prevEnd(basePosition)
+        : basePosition;
+
+    let range = helper.getCurrentStatement(position);
+
+    // Clamp to ignore characters such as \r\n
+    // Go to next statement if at the end of statement
+    if (position.isEqual(helper.clampToLine(range.start))) {
+        range = helper.getCurrentStatement(helper.prevEnd(position));
+    }
+
+    // Improve selection by getting the largest at the end (should help overall)
+    range = helper.getCurrentStatement(range.end);
+
+    return range;
 }
 
-async function getNextStatement(editor: vscode.TextEditor) {
-    return await getStatement(editor, GoToFunctions.nextNonEmpty2, endPosition);
-}
-
-async function getPrevStatement(editor: vscode.TextEditor) {
-    return await getStatement(
-        editor,
-        GoToFunctions.prevNonEmpty2,
-        startPosition
-    );
-}
-
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
-    // Use the console to output diagnostic information (console.log) and errors (console.error)
-    // This line of code will only be executed once when your extension is activated
+export async function activate(context: vscode.ExtensionContext) {
     console.log('Initializing "code-leaper"!');
 
-    // The command has been defined in the package.json file
-    // Now provide the implementation of the command with registerCommand
-    // The commandId parameter must match the command field in package.json
+    await SelectionHelper.init();
+
     context.subscriptions.push(
-        vscode.commands.registerCommand(
-            'code-leaper.jumpNextStatement',
-            async () => {
-                const editor = vscode.window.activeTextEditor;
-                if (!editor) return;
+        vscode.commands.registerCommand('code-leaper.jumpNextStatement', () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) return;
 
-                const statement = await getNextStatement(editor);
-
-                // TODO add option to jump to start/end of statement when moving between statements
-                moveCursor(editor, endPosition(statement));
-            }
-        )
+            moveCursor(editor, nextStatement(editor).end);
+        })
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand(
-            'code-leaper.jumpPrevStatement',
-            async () => {
-                const editor = vscode.window.activeTextEditor;
-                if (!editor) return;
+        vscode.commands.registerCommand('code-leaper.jumpPrevStatement', () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) return;
 
-                const statement = await getPrevStatement(editor);
-
-                moveCursor(editor, startPosition(statement));
-            }
-        )
+            moveCursor(editor, prevStatement(editor).start);
+        })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand(
             'code-leaper.selectNextStatement',
-            async () => {
+            () => {
                 const editor = vscode.window.activeTextEditor;
                 if (!editor) return;
 
-                const statement = await getNextStatement(editor);
-
-                const range = nodeRange(statement);
-
+                const range = nextStatement(editor);
                 editor.selection = new vscode.Selection(range.start, range.end);
+                editor.revealRange(range);
             }
         )
     );
@@ -110,21 +89,18 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(
             'code-leaper.selectPrevStatement',
-            async () => {
+            () => {
                 const editor = vscode.window.activeTextEditor;
                 if (!editor) return;
 
-                const statement = await getPrevStatement(editor);
-
-                const range = nodeRange(statement);
-
+                const range = prevStatement(editor);
                 editor.selection = new vscode.Selection(range.end, range.start);
+                editor.revealRange(range);
             }
         )
     );
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {
     // empty
 }
