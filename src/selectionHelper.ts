@@ -139,32 +139,22 @@ export default class SelectionHelper {
                 ? position.end.line
                 : position.line;
 
-        let baseNode = this.getLineNode(line);
+        const baseNode = this.getLineNode(line);
         if (!baseNode) throw new Error('No valid nodes');
 
         let baseRange = nodeRange(baseNode);
 
-        if (
-            baseNode.parent &&
-            ((!this.isSOL(baseRange.start) && !this.isEOL(baseRange.end)) ||
-                (!baseNode.isNamed && // ? Clean this condition
-                    baseNode.endPosition.column -
-                        baseNode.startPosition.column ==
-                        1))
-        ) {
-            baseNode = baseNode.parent;
-            baseRange = nodeRange(baseNode);
-        }
-
-        let sibling = baseNode.nextSibling;
-        while (
-            !this.isEOL(baseRange.end) &&
-            !!sibling /* && !sibling.isNamed */
-        ) {
-            if (!isComment(sibling)) {
-                baseRange = baseRange.union(nodeRange(sibling));
+        // If sibling extends to EOL add it to selection
+        const sibling = baseNode.nextSibling;
+        if (!this.isEOL(baseRange.end) && sibling) {
+            const siblingRange = nodeRange(sibling);
+            if (
+                siblingRange.start.line == siblingRange.end.line &&
+                !isComment(sibling) &&
+                this.isEOL(siblingRange.end)
+            ) {
+                baseRange = baseRange.union(siblingRange);
             }
-            sibling = sibling.nextSibling;
         }
 
         return baseRange;
